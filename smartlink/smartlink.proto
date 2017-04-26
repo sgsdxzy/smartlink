@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+message DeviceOperation {
+    string devicename = 1;
+    string operation = 2;
+    repeated string args = 3;
+}
+
+message NodeOperation {
+    string name = 1;
+    repeated DeviceOperation operations = 2;
+}
+
+message DeviceUpdate {
+    string name = 1;
+    repeated string status = 2;
+}
+
+message NodeUpdate {
+    repeated DeviceUpdate updates = 1;
+}
+
+message OperationDescription {
+    string name = 1;
+    repeated string args = 2;
+}
+
+message DeviceDescription {
+    string name = 1;
+    string description = 2;
+    repeated OperationDescription operations = 3;
+}
+
+message NodeDescription {
+    string name = 1;
+    string description = 2;
+    repeated DeviceDescription devices = 3;
+}
