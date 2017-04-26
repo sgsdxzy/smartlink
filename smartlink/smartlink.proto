@@ -29,6 +29,7 @@ message DeviceDescription {
     string name = 1;
     string description = 2;
     repeated OperationDescription operations = 3;
+    repeated string updateDescription = 4;
 }
 
 message NodeDescription {
