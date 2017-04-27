@@ -21,7 +21,7 @@ class SmartlinkControl(protocol.Protocol):
                 pass
             return
         try:
-            nodeOpLink = link_pb2.Nodelink.FromString(data)
+            nodeOpLink = link_pb2.NodeLink.FromString(data)
             for devOpLink in nodeOpLink.devLink:
                 devOpHandler = self.factory.nodeOpHandler[devOpLink.devName]
                 for opLink in devOpLink.link:
