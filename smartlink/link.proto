@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+message NodeLink {
+    enum LinkType {
+        OPERATION = 0;
+        DESCRIPTION = 1;
+    }
+    message DeviceLink {
+        message Link {
+            string name = 1;
+            repeated string args = 2;
+        }
+        string devName = 1;
+        string devDesc = 2;
+        repeated Link link = 3;
+    }
+    string nodeName = 1;
+    string nodeDesc = 2;
+    LinkType type = 3;
+    repeated DeviceLink devLink = 4;
+}

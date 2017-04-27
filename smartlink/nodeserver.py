@@ -2,7 +2,7 @@ from twisted.internet import protocol, task
 from twisted.logger import globalLogBeginner, textFileLogObserver
 from sys import stdout
 
-import smartlink.smartlink_pb2 as pb2
+from smartlink import link_pb2
 
 class SmartlinkControl(protocol.Protocol):
     def connectionMade(self):
@@ -14,15 +14,18 @@ class SmartlinkControl(protocol.Protocol):
     def dataReceived(self, data):
         if not self.clientReady:
             try:
-                if data.decode("utf-8") == "READY":
+                if data.decode("utf-8") == "RDY":
                     self.clientReady = True
                     self.factory.clientReady(self)
             except:
                 pass
             return
         try:
-            operation = pb2.DeviceOperation.FromString(data)
-            self.factory.operationHandler[operation.devicename][operation.operation](operation.args)
+            nodeOpLink = link_pb2.Nodelink.FromString(data)
+            for devOpLink in nodeOpLink.devLink:
+                devOpHandler = self.factory.nodeOpHandler[devOpLink.devName]
+                for opLink in devOpLink.link:
+                    devOpHandler[opLink.name](opLink.args)
         except:
             if self.factory.logger:
                 self.factory.logger.warn("{prefix} failed to execute operation from {peer}".\
@@ -31,31 +34,34 @@ class SmartlinkControl(protocol.Protocol):
 
 class SmartlinkFactory(protocol.Factory):
     protocol = SmartlinkControl
-    def __init__(self, frequency = 1, logger = None, operationHandler = None, updateHandler = None, nodeDescription = None):
+    def __init__(self, frequency = 1, logger = None, ctrlOpHandler = None, nodeOpHandler = None, nodeDesc = None,):
         self.broadcast = []
-        self.operationHandler = operationHandler
-        self.updateHandler = updateHandler
-        self.nodeDescription = nodeDescription
-        if self.nodeDescription :
-            self.strDescription = nodeDescription.SerializeToString()
+        self.ctrlOpHandler = ctrlOpHandler
+        self.nodeOpHandler = nodeOpHandler
+        self.nodeDesc = nodeDesc
+        if self.nodeDesc:
+            self.strNodeDesc = nodeDesc.SerializeToString()
         self.lc = task.LoopingCall(self.announce)
         self.lc.start(1/frequency)
         self.logger = logger
 
     def announce(self):
-        nodeUpdate = pb2.NodeUpdate()
-        for deviceName, getStatusFuncList in self.updateHandler.items():
-            deviceUpdate = nodeUpdate.updates.add()
-            deviceUpdate.name = deviceName
-            for getStatusFunc in getStatusFuncList:
-                deviceUpdate.status.append(getStatusFunc())
-        strData = nodeUpdate.SerializeToString()
+        ctrlOpLink = link_pb2.NodeLink()
+        for devName, ctrlOpList in self.ctrlOpHandler.items():
+            devOpLink = ctrlOpLink.devLink.add()
+            devOpLink.devName = devName
+            for opName, opFunc in ctrlOpList:
+                opLink = devOpLink.link.add()
+                opLink.name = opName
+                opLink.args.extend(opFunc())
+        strData = ctrlOpLink.SerializeToString()
+        #print(len(strData))
         for client in self.broadcast:
             client.transport.write(strData)
 
     def clientConnectionMade(self, client):
-        if self.strDescription :
-            client.transport.write(self.strDescription)
+        if self.strNodeDesc :
+            client.transport.write(self.strNodeDesc)
 
     def clientReady(self, client):
         self.broadcast.append(client)
@@ -66,36 +72,41 @@ class SmartlinkFactory(protocol.Factory):
         except ValueError:
             pass
 
+
 class Node:
-    """Helper class for generating DeviceHandler, Updatehandler and NodeDescription for SmartlinkFactory"""
+    """Helper class for generating nodeOpHandler, ctrlOpHandler and nodeDesc for SmartlinkFactory"""
     def __init__(self, name, description):
-        self.operationHandler = {}
-        self.updateHandler = {}
-        self.nodeDescription = pb2.NodeDescription()
-        self.nodeDescription.name = name
-        self.nodeDescription.description = description
+        self.nodeOpHandler = {}
+        self.ctrlOpHandler = {}
 
-    def addDevice(self, name, description, operationList, updateList):
-        """name: name of device
+        self.nodeDesc = link_pb2.NodeLink()
+        self.nodeDesc.nodeName = name
+        self.nodeDesc.nodeDesc = description
+        self.nodeDesc.type = link_pb2.NodeLink.DESCRIPTION
+
+    def addDevice(self, name, description, ctrlOpList = None, nodeOpList = None):
+        """Add device to node
+           name: name of device
            description: description of device
-           operationList: a list of (operationName, operationFunction, operationArgs...)
-           updateList: a list of updateFunction
+           ctrlOpList: the list of operations called by node to execute on control, list of (opName, opFunc)
+           nodeOpList: the list of operations called by control to execute on node, list of (opName, opFunc, opArgs...)
            """
-        self.updateHandler[name] = updateList
+        self.ctrlOpHandler[name] = ctrlOpList
 
-        deviceDescription = self.nodeDescription.devices.add()
-        deviceDescription.name = name
-        deviceDescription.description = description
+        devDescLink = self.nodeDesc.devLink.add()
+        devDescLink.devName = name
+        devDescLink.devDesc = description
+        for op in ctrlOpList:
+            opDescLink = devDescLink.link.add()
+            opDescLink.name = op[0]
 
-        operationDict = {}
-        for operation in operationList:
-            operationDict[operation[0]] = operation[1]
-
-            opDescription = deviceDescription.operations.add()
-            opDescription.name = operation[0]
-            #if len(operation) > 2:
-            opDescription.args.extend(operation[2:])
-        self.operationHandler[name] = operationDict
+        nodeDevOpDict = {}
+        for op in nodeOpList:
+            nodeDevOpDict[op[0]] = op[1]
+            opDescLink = devDescLink.link.add()
+            opDescLink.name = op[0]
+            opDescLink.args.extend(op[2:])
+        self.nodeOpHandler[name] = nodeDevOpDict
 
 
 def start(reactor, factory, port):
