@@ -1,10 +1,15 @@
 from twisted.internet import protocol, task
-from twisted.logger import globalLogBeginner, textFileLogObserver
+from twisted.logger import globalLogBeginner, textFileLogObserver, Logger
 from sys import stdout
+from collections import namedtuple
 
 from smartlink import link_pb2
 
+logger = Logger()
+
 class SmartlinkControl(protocol.Protocol):
+    """Twisted protocal class for smartlink node server to handle connections
+        from controls."""
     def connectionMade(self):
         self.factory.clientConnectionMade(self)
         self.clientReady = False
@@ -18,50 +23,45 @@ class SmartlinkControl(protocol.Protocol):
                     self.clientReady = True
                     self.factory.clientReady(self)
             except:
+                # Client didn't send "RDY" to notify that it is ready for broadcast
                 pass
             return
         try:
-            nodeOpLink = link_pb2.NodeLink.FromString(data)
-            for devOpLink in nodeOpLink.devLink:
-                devOpHandler = self.factory.nodeOpHandler[devOpLink.devName]
-                for opLink in devOpLink.link:
-                    devOpHandler[opLink.name](opLink.args)
+            node_link = link_pb2.NodeLink.FromString(data)
         except:
-            if self.factory.logger:
-                self.factory.logger.warn("{prefix} failed to execute operation from {peer}".\
+            logger.warn("{prefix} failed to parse node link from {peer}".\
+                format(prefix = self.logPrefix(), peer=self.transport.getPeer()))
+            return
+        try:
+            self.factory.node.exec_node_link(node_link)
+        except:
+            logger.warn("{prefix} failed to execute operation from {peer}".\
                 format(prefix = self.logPrefix(), peer=self.transport.getPeer()))
             raise
 
 class SmartlinkFactory(protocol.Factory):
+    """Twisted factory class for smartlink node server."""
     protocol = SmartlinkControl
-    def __init__(self, frequency = 1, logger = None, ctrlOpHandler = None, nodeOpHandler = None, nodeDesc = None,):
+    def __init__(self, node, frequency = 1):
         self.broadcast = []
-        self.ctrlOpHandler = ctrlOpHandler
-        self.nodeOpHandler = nodeOpHandler
-        self.nodeDesc = nodeDesc
-        if self.nodeDesc:
-            self.strNodeDesc = nodeDesc.SerializeToString()
-        self.lc = task.LoopingCall(self.announce)
-        self.lc.start(1/frequency)
-        self.logger = logger
+        self.node = node
+        self.desc_link = node.generate_node_desclink()
+        #print(self.desc_link)
+        self.str_desc = self.desc_link.SerializeToString()
+        self.loopcall = task.LoopingCall(self.announce)
+        self.loopcall.start(1/frequency)
 
     def announce(self):
-        ctrlOpLink = link_pb2.NodeLink()
-        for devName, ctrlOpList in self.ctrlOpHandler.items():
-            devOpLink = ctrlOpLink.devLink.add()
-            devOpLink.devName = devName
-            for opName, opFunc in ctrlOpList:
-                opLink = devOpLink.link.add()
-                opLink.name = opName
-                opLink.args.extend(opFunc())
-        strData = ctrlOpLink.SerializeToString()
-        #print(len(strData))
+        # Broadcast node link to all connected and ready controls. This is usually used for updating node status.
+        node_link = self.node.get_node_link()
+        str_link = node_link.SerializeToString()
+        #print(len(str_link))
+        #print(node_link)
         for client in self.broadcast:
-            client.transport.write(strData)
+            client.transport.write(str_link)
 
     def clientConnectionMade(self, client):
-        if self.strNodeDesc :
-            client.transport.write(self.strNodeDesc)
+        client.transport.write(self.str_desc)
 
     def clientReady(self, client):
         self.broadcast.append(client)
@@ -70,43 +70,174 @@ class SmartlinkFactory(protocol.Factory):
         try:
             self.broadcast.remove(client)
         except ValueError:
+            # Client lost connection before it is ready
             pass
+
+Operation = namedtuple('Operation', ['id', 'name', 'desc', 'func', 'args'])
+
+class Device:
+    """A node device is the basic unit of operation execution.
+        It executes operations in ctrl_oplist to get args and wraps them in a device
+        link. This is usually used for generating status update for control.
+        It parses incoming operation device links, looks up corresponding methods
+        in node_oplist and executes them.
+        """
+    def __init__(self, name, desc):
+        self.name = name
+        self.desc = desc
+        self.ctrl_oplist = []
+        self.node_oplist = []
+        self.id = None
+
+    def add_ctrl_op(self, name, desc, func, args=None):
+        """Add one operation to be executed on control. func is the local
+            function to generate arguments. args must be a sequence of strings
+            and provides additional information about func to control.
+            Returns: the operation's id.
+            """
+        id = len(self.ctrl_oplist)
+        op = Operation(id, name, desc, func, args)
+        self.ctrl_oplist.append(op)
+        return id
+
+    def add_ctrl_ops(self, oplist):
+        """Add multiple operations to be executed on control. oplist is
+            a list of (name, desc, func, args) tuples.
+            Returns: None
+            """
+        for op in oplist:
+            self.add_ctrl_op(*op)
+
+    def add_node_op(self, name, desc, func, args=None):
+        """Add one operation to be executed on node. func is the local
+            function to execute the operation. args must be a sequence of strings
+            and provides additional information about func to control.
+            Returns: the operation's id.
+            """
+        id = len(self.node_oplist)
+        op = Operation(id, name, desc, func, args)
+        self.node_oplist.append(op)
+        return id
+
+    def add_node_ops(self, oplist):
+        """Add multiple operations to be executed on node. oplist is
+            a list of (name, desc, func, args) tuples.
+            Returns: None
+            """
+        for op in oplist:
+            self.add_node_op(*op)
+
+    def get_dev_link(self, node_link):
+        """Execute operations in ctrl_oplist to get args and wrap them in a
+            device link, then append it to node_link.
+            Returns: the created link_pb2.DeviceLink
+        """
+        dev_link = node_link.device_links.add()
+        if self.id:
+            dev_link.device_id = self.id
+        for op in self.ctrl_oplist:
+            link = dev_link.links.add()
+            link.id = op.id
+            args = op.func()
+            if isinstance(args, tuple):
+                for arg in args:
+                    link.args.append(str(arg))
+            elif args:
+                link.args.append(str(args))
+        return dev_link
+
+    def exec_dev_link(self, dev_link):
+        """Parse link_pb2.DeviceLink dev_link, looks up corresponding methods
+            in node_oplist and executes them.
+            Returns: None
+            """
+        for link in dev_link.links:
+            op = self.node_oplist[link.id]
+            op.func(link.args)
+
+    def generate_dev_desclink(self, node_link):
+        """Generate a description device link to describe operations about this
+            device, then append it to node_link.
+            Returns: the created link_pb2.DeviceLink
+            """
+        dev_link = node_link.device_links.add()
+        if self.id:
+            dev_link.device_id = self.id
+        dev_link.device_name = self.name
+        dev_link.device_desc = self.desc
+        for op in self.ctrl_oplist:
+            link = dev_link.links.add()
+            link.target = link_pb2.Link.CONTROL
+            link.id = op.id
+            link.name = op.name
+            link.desc = op.desc
+            if op.args:
+                link.args.extend(op.args)
+        for op in self.node_oplist:
+            link = dev_link.links.add()
+            link.target = link_pb2.Link.NODE
+            link.id = op.id
+            link.name = op.name
+            link.desc = op.desc
+            if op.args:
+                link.args.extend(op.args)
+        return dev_link
 
 
 class Node:
-    """Helper class for generating nodeOpHandler, ctrlOpHandler and nodeDesc for SmartlinkFactory"""
-    def __init__(self, name, description):
-        self.nodeOpHandler = {}
-        self.ctrlOpHandler = {}
+    """A node in smartlink is the terminal to control physical devices like
+        stepper motors. A Node object consists of one or multiple Device objects.
+        It is responsible for wrapping device links into a node link, parsing a
+        node link and handling contained device links over to corresponding devices.
+        """
+    def __init__(self, name, desc):
+        self.name = name
+        self.desc = desc
+        self.device_list = []
 
-        self.nodeDesc = link_pb2.NodeLink()
-        self.nodeDesc.nodeName = name
-        self.nodeDesc.nodeDesc = description
-        self.nodeDesc.type = link_pb2.NodeLink.DESCRIPTION
+    def add_device(self, device):
+        """Add device to node and assign the device its id.
+            Returns: None
+            """
+        id = len(self.device_list)
+        device.id = id
+        self.device_list.append(device)
 
-    def addDevice(self, name, description, ctrlOpList = None, nodeOpList = None):
-        """Add device to node
-           name: name of device
-           description: description of device
-           ctrlOpList: the list of operations called by node to execute on control, list of (opName, opFunc)
-           nodeOpList: the list of operations called by control to execute on node, list of (opName, opFunc, opArgs...)
-           """
-        self.ctrlOpHandler[name] = ctrlOpList
+    def add_devices(self, device_list):
+        """Add a list of devices to node and assign them their id.
+            Returns: None
+            """
+        for dev in device_list:
+            self.add_device(dev)
 
-        devDescLink = self.nodeDesc.devLink.add()
-        devDescLink.devName = name
-        devDescLink.devDesc = description
-        for op in ctrlOpList:
-            opDescLink = devDescLink.link.add()
-            opDescLink.name = op[0]
+    def get_node_link(self):
+        """Get device links from devices and wrap them into a node link.
+            Returns: link_pb2.NodeLink
+        """
+        node_link = link_pb2.NodeLink()
+        for dev in self.device_list:
+            dev.get_dev_link(node_link)
+        return node_link
 
-        nodeDevOpDict = {}
-        for op in nodeOpList:
-            nodeDevOpDict[op[0]] = op[1]
-            opDescLink = devDescLink.link.add()
-            opDescLink.name = op[0]
-            opDescLink.args.extend(op[2:])
-        self.nodeOpHandler[name] = nodeDevOpDict
+    def exec_node_link(self, node_link):
+        """Parse link_pb2.NodeLink node_link and handle contained device links to
+            corresponding devices.
+            Returns: None
+            """
+        for dev_link in node_link.device_links:
+            dev = self.device_list[dev_link.device_id]
+            dev.exec_dev_link(dev_link)
+
+    def generate_node_desclink(self):
+        """Generate a description node link to describe devices about this node.
+            Returns: link_pb2.NodeLink
+            """
+        node_link = link_pb2.NodeLink()
+        node_link.node_name = self.name
+        node_link.node_desc = self.desc
+        for dev in self.device_list:
+            dev.generate_dev_desclink(node_link)
+        return node_link
 
 
 def start(reactor, factory, port):

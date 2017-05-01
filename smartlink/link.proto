@@ -1,21 +1,26 @@
 syntax = "proto3";
 
+message Link {
+    enum Target {   // The receiving end of link, where operation is executed
+        CONTROL = 0;
+        NODE = 1;
+    }
+    Target target = 1;
+    uint32 id = 2;
+    string name = 3;
+    string desc = 4;
+    repeated string args = 5;
+}
+
+message DeviceLink {
+    uint32 device_id = 1;
+    string device_name = 2;
+    string device_desc = 3;
+    repeated Link links = 4;
+}
+
 message NodeLink {
-    enum LinkType {
-        OPERATION = 0;
-        DESCRIPTION = 1;
-    }
-    message DeviceLink {
-        message Link {
-            string name = 1;
-            repeated string args = 2;
-        }
-        string devName = 1;
-        string devDesc = 2;
-        repeated Link link = 3;
-    }
-    string nodeName = 1;
-    string nodeDesc = 2;
-    LinkType type = 3;
-    repeated DeviceLink devLink = 4;
+    string node_name = 1;
+    string node_desc = 2;
+    repeated DeviceLink device_links = 3;
 }
