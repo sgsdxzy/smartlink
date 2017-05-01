@@ -1,7 +1,7 @@
-from twisted.internet import protocol, task
-from twisted.logger import globalLogBeginner, textFileLogObserver, Logger
 from sys import stdout
 from collections import namedtuple
+from twisted.internet import protocol, task
+from twisted.logger import globalLogBeginner, textFileLogObserver, Logger
 
 from smartlink import link_pb2
 
@@ -10,17 +10,21 @@ logger = Logger()
 class SmartlinkControl(protocol.Protocol):
     """Twisted protocal class for smartlink node server to handle connections
         from controls."""
+    def __init__(self):
+        super().__init__()
+        self.client_ready = False
+
     def connectionMade(self):
         self.factory.clientConnectionMade(self)
-        self.clientReady = False
+
     def connectionLost(self, reason):
         self.factory.clientConnectionLost(self)
 
     def dataReceived(self, data):
-        if not self.clientReady:
+        if not self.client_ready:
             try:
                 if data.decode("utf-8") == "RDY":
-                    self.clientReady = True
+                    self.client_ready = True
                     self.factory.clientReady(self)
             except:
                 # Client didn't send "RDY" to notify that it is ready for broadcast
@@ -30,19 +34,19 @@ class SmartlinkControl(protocol.Protocol):
             node_link = link_pb2.NodeLink.FromString(data)
         except:
             logger.warn("{prefix} failed to parse node link from {peer}".\
-                format(prefix = self.logPrefix(), peer=self.transport.getPeer()))
+                format(prefix=self.logPrefix(), peer=self.transport.getPeer()))
             return
         try:
             self.factory.node.exec_node_link(node_link)
         except:
             logger.warn("{prefix} failed to execute operation from {peer}".\
-                format(prefix = self.logPrefix(), peer=self.transport.getPeer()))
+                format(prefix=self.logPrefix(), peer=self.transport.getPeer()))
             raise
 
 class SmartlinkFactory(protocol.Factory):
     """Twisted factory class for smartlink node server."""
     protocol = SmartlinkControl
-    def __init__(self, node, frequency = 1):
+    def __init__(self, node, frequency=1):
         self.broadcast = []
         self.node = node
         self.desc_link = node.generate_node_desclink()
@@ -52,7 +56,9 @@ class SmartlinkFactory(protocol.Factory):
         self.loopcall.start(1/frequency)
 
     def announce(self):
-        # Broadcast node link to all connected and ready controls. This is usually used for updating node status.
+        """Broadcast node link to all connected and ready controls.
+            This is usually used for updating node status.
+            """
         node_link = self.node.get_node_link()
         str_link = node_link.SerializeToString()
         #print(len(str_link))
@@ -87,7 +93,7 @@ class Device:
         self.desc = desc
         self.ctrl_oplist = []
         self.node_oplist = []
-        self.id = None
+        self.dev_id = None
 
     def add_ctrl_op(self, name, desc, func, args=None):
         """Add one operation to be executed on control. func is the local
@@ -95,10 +101,10 @@ class Device:
             and provides additional information about func to control.
             Returns: the operation's id.
             """
-        id = len(self.ctrl_oplist)
-        op = Operation(id, name, desc, func, args)
+        op_id = len(self.ctrl_oplist)
+        op = Operation(op_id, name, desc, func, args)
         self.ctrl_oplist.append(op)
-        return id
+        return op_id
 
     def add_ctrl_ops(self, oplist):
         """Add multiple operations to be executed on control. oplist is
@@ -114,10 +120,10 @@ class Device:
             and provides additional information about func to control.
             Returns: the operation's id.
             """
-        id = len(self.node_oplist)
-        op = Operation(id, name, desc, func, args)
+        op_id = len(self.node_oplist)
+        op = Operation(op_id, name, desc, func, args)
         self.node_oplist.append(op)
-        return id
+        return op_id
 
     def add_node_ops(self, oplist):
         """Add multiple operations to be executed on node. oplist is
@@ -133,8 +139,8 @@ class Device:
             Returns: the created link_pb2.DeviceLink
         """
         dev_link = node_link.device_links.add()
-        if self.id:
-            dev_link.device_id = self.id
+        if self.dev_id:
+            dev_link.device_id = self.dev_id
         for op in self.ctrl_oplist:
             link = dev_link.links.add()
             link.id = op.id
@@ -161,8 +167,8 @@ class Device:
             Returns: the created link_pb2.DeviceLink
             """
         dev_link = node_link.device_links.add()
-        if self.id:
-            dev_link.device_id = self.id
+        if self.dev_id:
+            dev_link.device_id = self.dev_id
         dev_link.device_name = self.name
         dev_link.device_desc = self.desc
         for op in self.ctrl_oplist:
@@ -199,8 +205,8 @@ class Node:
         """Add device to node and assign the device its id.
             Returns: None
             """
-        id = len(self.device_list)
-        device.id = id
+        dev_id = len(self.device_list)
+        device.dev_id = dev_id
         self.device_list.append(device)
 
     def add_devices(self, device_list):
