@@ -148,7 +148,7 @@ class Device:
             if isinstance(args, tuple):
                 for arg in args:
                     link.args.append(str(arg))
-            elif args:
+            elif args is not None:
                 link.args.append(str(args))
         return dev_link
 
