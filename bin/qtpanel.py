@@ -11,32 +11,47 @@ class DevicePanel(QWidget):
         generates display and input widgets according to description device link
         desc_link.
         """
-    def __init__(self, desc_link):
+    def __init__(self, node, desc_link):
         super().__init__()
+        self.node = node
         self.desc_link = desc_link
         self.ctrl_funcs = []
-        self.node_funcs = []
+        self.node_execs = []
+        self.widget_index = 0
 
         self.initUI()
 
     def initUI(self):
         self.grid = QGridLayout()
         self.setLayout(self.grid)
-        widget_index = 0
         self.name_label = QLabel(self.desc_link.device_name)
-        self.grid.addWidget(self.name_label, 0, widget_index)
-        widget_index += 1
+        self.append_widget(self.name_label)
         for link in self.desc_link.links:
             if link.target == link_pb2.Link.CONTROL:
                 if link.desc == "num":
                     label = QLabel(link.name)
                     line_edit = QLineEdit()
-                    self.grid.addWidget(label, 0, widget_index)
-                    widget_index += 1
-                    self.grid.addWidget(line_edit, 0, widget_index)
-                    widget_index += 1
+                    self.append_widget(label)
+                    self.append_widget(line_edit)
                     func = lambda args: line_edit.setText(args[0])
                     self.ctrl_funcs.append(func)
+            if link.target == link_pb2.Link.NODE:
+                if link.desc == "num":
+                    label = QLabel(link.name)
+                    le = QLineEdit()
+                    button = QPushButton("Apply")
+                    self.append_widget(label)
+                    self.append_widget(le)
+                    self.append_widget(button)
+                    numexec = uibuilder.NumExec(link.id, self.desc_link.device_id, le, button, self.node)
+                    self.node_execs.append(numexec)
+                    button.clicked.connect(numexec.slot_exec)
+                elif link.desc == "num+-":
+                    pass
+
+    def append_widget(self, widget):
+        self.grid.addWidget(widget, 0, self.widget_index)
+        self.widget_index += 1
 
     def exec_dev_link(self, dev_link):
         for link in dev_link.links:
@@ -145,7 +160,7 @@ class NodePanel(QFrame):
 
         dev_index = 0
         for dev_link in node_link.device_links:
-            device = DevicePanel(dev_link)
+            device = DevicePanel(self, dev_link)
             self.device_list.append(device)
             self.node_grid.addWidget(device, dev_index, 0)
             dev_index += 1
