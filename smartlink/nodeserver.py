@@ -139,7 +139,7 @@ class Device:
             Returns: the created link_pb2.DeviceLink
         """
         dev_link = node_link.device_links.add()
-        if self.dev_id:
+        if self.dev_id is not None:
             dev_link.device_id = self.dev_id
         for op in self.ctrl_oplist:
             link = dev_link.links.add()
@@ -167,7 +167,7 @@ class Device:
             Returns: the created link_pb2.DeviceLink
             """
         dev_link = node_link.device_links.add()
-        if self.dev_id:
+        if self.dev_id is not None:
             dev_link.device_id = self.dev_id
         dev_link.device_name = self.name
         dev_link.device_desc = self.desc
@@ -177,7 +177,7 @@ class Device:
             link.id = op.id
             link.name = op.name
             link.desc = op.desc
-            if op.args:
+            if op.args is not None:
                 link.args.extend(op.args)
         for op in self.node_oplist:
             link = dev_link.links.add()
@@ -185,7 +185,7 @@ class Device:
             link.id = op.id
             link.name = op.name
             link.desc = op.desc
-            if op.args:
+            if op.args is not None:
                 link.args.extend(op.args)
         return dev_link
 
