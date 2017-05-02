@@ -19,11 +19,11 @@ def main():
     x_st = nodeserver.Device("X", "X axis stepper motor")
     x_st.add_ctrl_op("POS", "num", lambda:get_position(0))
     x_st.add_node_op("MOV", "num", lambda args:set_position(0, args), ['0', '20'])
-    x_st.add_node_op("INIT", "INITIALIZE", lambda:init(0))
+    #x_st.add_node_op("INIT", "INITIALIZE", lambda:init(0))
     y_st = nodeserver.Device("Y", "Y axis stepper motor")
     y_st.add_ctrl_op("POS", "num", lambda:get_position(1))
     y_st.add_node_op("MOV", "num", lambda args:set_position(1, args), ['0', '20'])
-    y_st.add_node_op("INIT", "INITIALIZE", lambda:init(1))
+    y_st.add_node_op("INIT", "", lambda:init(1))
     node.add_devices([x_st, y_st])
 
     factory = nodeserver.SmartlinkFactory(node, 1)
