@@ -145,10 +145,7 @@ class Device:
             link = dev_link.links.add()
             link.id = op.id
             args = op.func()
-            if isinstance(args, tuple):
-                for arg in args:
-                    link.args.append(str(arg))
-            elif args is not None:
+            if args is not None:
                 link.args.append(str(args))
         return dev_link
 
