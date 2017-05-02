@@ -17,7 +17,7 @@ class SmartlinkControl(protocol.Protocol):
     def connectionMade(self):
         self.factory.clientConnectionMade(self)
 
-    def connectionLost(self, reason):
+    def connectionLost(self, reason=connectionDone):
         self.factory.clientConnectionLost(self)
 
     def dataReceived(self, data):

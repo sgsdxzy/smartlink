@@ -73,7 +73,6 @@ class DevicePanel:
             widget = self.ctrl_op_list[link.id]
             widget.exec_link(link)
 
-
     def append_widgets(self, widget_list):
         """Append the OperationWidget to the end of current row. If after the
             operation the number of columns exceeds the maxlen of underlying
@@ -106,7 +105,7 @@ class OperationWidget:
     def __init__(self, device_panel, desc_link):
         self.dev_panel = device_panel
         self.desc_link = desc_link
-        self.exec_widget_list =[]
+        self.exec_widget_list = []
         self.all_widget_list = []
 
         self.arg_widget_dict = {
@@ -421,23 +420,3 @@ class NodePanel(QFrame):
         self.ready = False
         self.status_bar.showMessage(self.socket.errorString())
         self.status_light.setStyleSheet(self.StyleError)
-
-
-class NumExec:
-    def __init__(self, op_id, dev_id, line_edit, button, node):
-        self.op_id = op_id
-        self.dev_id = dev_id
-        self.le = line_edit
-        self.btn = button
-        self.node = node
-
-    def slot_exec(self):
-        node_link = link_pb2.NodeLink()
-        dev_link = node_link.device_links.add()
-        dev_link.device_id = self.dev_id
-        link = dev_link.links.add()
-        link.id = self.op_id
-        link.args.append(self.le.text())
-
-        str_link = node_link.SerializeToString()
-        self.node.socket.write(str_link)
