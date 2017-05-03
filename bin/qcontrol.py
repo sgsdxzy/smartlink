@@ -17,7 +17,6 @@ class ControlPanel(QWidget):
 
         self.grid = QGridLayout()
         self.setLayout(self.grid)
-        print(self.sizeHint())
 
         self.grid.addWidget(NodePanel(), 0, 0)
         self.grid.addWidget(NodePanel(), 0, 1)

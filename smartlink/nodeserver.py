@@ -17,7 +17,7 @@ class SmartlinkControl(protocol.Protocol):
     def connectionMade(self):
         self.factory.clientConnectionMade(self)
 
-    def connectionLost(self, reason=connectionDone):
+    def connectionLost(self, reason=protocol.connectionDone):
         self.factory.clientConnectionLost(self)
 
     def dataReceived(self, data):
@@ -156,7 +156,10 @@ class Device:
             """
         for link in dev_link.links:
             op = self.node_oplist[link.id]
-            op.func(link.args)
+            if len(link.args) > 0:
+                op.func(link.args)
+            else:
+                op.func()
 
     def generate_dev_desclink(self, node_link):
         """Generate a description device link to describe operations about this

@@ -5,181 +5,58 @@ from PyQt5.QtNetwork import *
 
 from smartlink import link_pb2
 
-class NodeGrid(QGridLayout):
-    """A NodeGrid is a QGridLayout to hold operation Widgets. Use add_device_panel
-        to add DevicePanels and use them to populate the layout.
+class DevicePanel(QGroupBox):
+    """A subpanel to display device status and receive control from user. It is
+        generated automatically according to thedescription link desc_link.
+        maxlen is the maximum number of basic QWidgets on a single line.
         """
-    def __init__(self, node_panel, maxlen=20):
-        """maxlen is the maximum number of QWidgets a row should hold."""
+    def __init__(self, node, desc_link, maxlen=20):
         super().__init__()
-        self.node = node_panel
-        self.maxlen = maxlen
-        self.row_index = -1
-        self.row_start = -1 # The staring row of current DevicePanel on NodeGrid
-        self.col_index = 1
-
-    def clear_all(self):
-        """Remove all DevicePanels and QWidgets.
-            Returns: None
-            """
-        while self.count():
-            child = self.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-        self.row_index = -1
-        self.row_start = -1
-        self.col_index = 1
-
-    def add_device_panel(self, dev_link):
-        """Append a DevicePanel at the end of rows.
-            Returns: DevicePanel
-            """
-        self.row_index += 1
-        self.row_start = self.row_index
-        self.col_index = 1
-        device_panel = DevicePanel(self, self.node, dev_link)
-        return device_panel
-
-
-class DevicePanel:
-    """DevicePanel is in fact not a QWidget. It manages and append actual QWidgets
-        to a NodeGrid to ensure alignment across widgets of different devices."""
-    def __init__(self, node_grid, node_panel, desc_link):
-        self.grid = node_grid
-        self.node = node_panel
-        self.name_label = None
+        self.node = node
         self.desc_link = desc_link
+        self.maxlen = maxlen
         self.ctrl_op_list = []
         self.node_op_list = []
+        self.initUI()
+
+    def initUI(self):
+        self.grid_layout = QGridLayout()
+        self.setLayout(self.grid_layout)
+        self.row_index = 0
+        self.col_index = 0
 
     def generate_panel(self):
         """Populate the panel by the description device link dev_link.
             Returns: None
             """
+        self.setTitle(self.desc_link.device_name)
         for link in self.desc_link.links:
             widget = OperationWidget(self, link)
             if link.target == link_pb2.Link.CONTROL:
                 self.ctrl_op_list.append(widget)
             elif link.target == link_pb2.Link.NODE:
                 self.node_op_list.append(widget)
-            self.append_widgets(widget.generate_widgets())
-        self.add_device_label()
+            self.append_widget(widget)
 
     def exec_dev_link(self, dev_link):
-        """Execute device link on control.
+        """Execute device link on control. This is usually an status update.
             Returns: None
             """
         for link in dev_link.links:
             widget = self.ctrl_op_list[link.id]
             widget.exec_link(link)
 
-    def append_widgets(self, widget_list):
+    def append_widget(self, widget):
         """Append the OperationWidget to the end of current row. If after the
-            operation the number of columns exceeds the maxlen of underlying
-            NodeGrid, they will be added to the start of a new row.
+            operation the number of columns exceeds the maxlen,
+            they will be added to the start of a new row.
             Returns: None
             """
-        col_length = len(widget_list)
-        if self.grid.col_index + col_length > self.grid.maxlen:
-            self.grid.row_index += 1
-            self.grid.col_index = 1
-        for widget in widget_list:
-            self.grid.addWidget(widget, self.grid.row_index, self.grid.col_index)
-            self.grid.col_index += 1
-
-    def add_device_label(self):
-        """After all of the device's actual widgets are added by append_widgets,
-            add a device name label at the start of all rows of the device.
-            Returns: None
-            """
-        label_height = self.grid.row_index - self.grid.row_start + 1
-        self.name_label = QLabel(self.desc_link.device_name)
-        self.name_label.setFont(self.node.dev_title_font)
-        self.grid.addWidget(self.name_label, self.grid.row_start, 0, label_height, 1)
-
-
-class OperationWidget:
-    """OperationWidget is in fact not a QWidget. It manages and append actual
-        QWidgets to a DevicePanel to ensure alignment across widgets of
-        different devices."""
-    def __init__(self, device_panel, desc_link):
-        self.dev_panel = device_panel
-        self.desc_link = desc_link
-        self.exec_widget_list = []
-        self.all_widget_list = []
-
-        self.arg_widget_dict = {
-            "num": NumWidget,
-            "bool": BoolWidget,
-            "str": StrWidget}
-
-    def generate_widgets(self):
-        """Parse link.desc and generate corresponding widgets. First is a QLabel
-            of link.name. link.desc should describe the signature of the concrete
-            node function. desc is a string containing arbitrary number of one
-            of the following to indicate argument type, separated by single space:
-                num : a NumWidget
-                bool : a BoolWidget
-                str : a StrWidget
-            Additional Widgets is generated according to argument type in
-            link.desc. These Widgets should implement `exec_arg(str)` to execute a
-            control operation and `str get_arg()` to get control arg.
-            link.args is passed to __init__ as extra args.
-            if an argument type is unknown, an StrWidget is generated.
-            If link.target is link_pb2.Link.NODE, a QPushButton is
-            appended at the end to send the control command.
-            Returns: The generated list of widgets
-            """
-        arg_type_list = self.desc_link.desc.split()
-        if len(arg_type_list) != 0:
-            label = QLabel(self.desc_link.name)
-            self.all_widget_list.append(label)
-            ext_args = self.desc_link.args[:]
-            for arg_type in arg_type_list:
-                widget = self.arg_widget_dict.get(arg_type, StrWidget)(ext_args)
-                self.exec_widget_list.append(widget)
-                self.all_widget_list.append(widget)
-
-        if self.desc_link.target == link_pb2.Link.NODE:
-            if len(arg_type_list) != 0:
-                button = QPushButton("Apply")
-            else:
-                button = QPushButton(self.desc_link.name)
-            button.clicked.connect(self.uplink)
-            self.all_widget_list.append(button)
-        elif self.desc_link.target == link_pb2.Link.CONTROL:
-            pass
-
-        return self.all_widget_list
-
-    def exec_link(self, link):
-        """Execute link on control.
-            Returns: None
-            """
-        for i in range(len(self.exec_widget_list)):
-            self.exec_widget_list[i].exec_arg(link.args[i])
-
-    def get_link(self, dev_link):
-        """Collect args from widgets and wrap them into a link, then append it
-            to DeviceLink dev_link.
-            Returns: the created link_pb2.Link
-            """
-        link = dev_link.links.add()
-        link.id = self.desc_link.id
-        for widget in self.exec_widget_list:
-            link.args.append(str(widget.get_arg()))
-        return link
-
-    @pyqtSlot()
-    def uplink(self):
-        """Send control link to node server.
-            Returns: None
-            """
-        node_link = link_pb2.NodeLink()
-        dev_link = node_link.device_links.add()
-        dev_link.device_id = self.dev_panel.desc_link.device_id
-        self.get_link(dev_link)
-        self.dev_panel.node.socket.write(node_link.SerializeToString())
+        if self.col_index + len(widget) > self.maxlen:
+            self.row_index += 1
+            self.col_index = 0
+        self.grid_layout.addWidget(widget, self.row_index, self.col_index)
+        self.col_index += len(widget)
 
 class StrWidget(QLineEdit):
     """Widget for handling "str" type argument."""
@@ -236,8 +113,101 @@ class BoolWidget(QPushButton):
             return "0"
 
 
+class OperationWidget(QWidget):
+    """A widget to handle a link operation."""
+    arg_widget_dict = {
+        "num": NumWidget,
+        "bool": BoolWidget,
+        "str": StrWidget
+        }
+
+    def __init__(self, device, desc_link):
+        super().__init__()
+        self.device = device
+        self.desc_link = desc_link
+        self.exec_widget_list = []
+        self.all_widget_list = []
+        self.initUI()
+
+    def initUI(self):
+        self.layout = QHBoxLayout()
+        self.setLayout(self.layout)
+        self.generate()
+
+    def __len__(self):
+        return len(self.all_widget_list)
+
+    def generate(self):
+        """Parse link.desc and generate corresponding widgets. First is a QLabel
+            of link.name. link.desc should describe the signature of the concrete
+            node function. desc is a string containing arbitrary number of one
+            of the following to indicate argument type, separated by single space:
+                num : a NumWidget
+                bool : a BoolWidget
+                str : a StrWidget
+            Additional Widgets is generated according to argument type in
+            link.desc. These Widgets should implement `exec_arg(str)` to execute a
+            control operation and `str get_arg()` to get control arg.
+            link.args is passed to __init__ as extra args.
+            if an argument type is unknown, an StrWidget is generated.
+            If link.target is link_pb2.Link.NODE, a QPushButton is
+            appended at the end to send the control command.
+            Returns: None
+            """
+        arg_type_list = self.desc_link.desc.split()
+        if len(arg_type_list) != 0:
+            label = QLabel(self.desc_link.name)
+            self.all_widget_list.append(label)
+            ext_args = self.desc_link.args[:]
+            for arg_type in arg_type_list:
+                widget = self.arg_widget_dict.get(arg_type, StrWidget)(ext_args)
+                self.exec_widget_list.append(widget)
+                self.all_widget_list.append(widget)
+
+        if self.desc_link.target == link_pb2.Link.NODE:
+            if len(arg_type_list) != 0:
+                button = QPushButton("Apply")
+            else:
+                button = QPushButton(self.desc_link.name)
+            button.clicked.connect(self.uplink)
+            self.all_widget_list.append(button)
+        elif self.desc_link.target == link_pb2.Link.CONTROL:
+            pass
+        for widget in self.all_widget_list:
+            self.layout.addWidget(widget)
+
+    def exec_link(self, link):
+        """Execute link on control.
+            Returns: None
+            """
+        for i in range(len(self.exec_widget_list)):
+            self.exec_widget_list[i].exec_arg(link.args[i])
+
+    def get_link(self, dev_link):
+        """Collect args from widgets and wrap them into a link, then append it
+            to DeviceLink dev_link.
+            Returns: the created link_pb2.Link
+            """
+        link = dev_link.links.add()
+        link.id = self.desc_link.id
+        for widget in self.exec_widget_list:
+            link.args.append(str(widget.get_arg()))
+        return link
+
+    @pyqtSlot()
+    def uplink(self):
+        """Send control link to node server.
+            Returns: None
+            """
+        node_link = link_pb2.NodeLink()
+        dev_link = node_link.device_links.add()
+        dev_link.device_id = self.device.desc_link.device_id
+        self.get_link(dev_link)
+        self.device.node.socket.write(node_link.SerializeToString())
+
+
 class NodePanel(QFrame):
-    """A subpanel to display node status and send controls to node. It is
+    """A panel to display node status and send controls to node. It is
         generated automatically according to the first description link received
         from socket.
         """
@@ -251,25 +221,25 @@ class NodePanel(QFrame):
         self.host_ip = None
         self.socket = QTcpSocket()
         self.desc_link = None
-        self.initUI()
         self.device_list = []
+        self.initUI()
 
     def initUI(self):
         self.setFrameStyle(QFrame.Box|QFrame.Raised)
         self.setLineWidth(2)
 
-        self.frame_grid = QGridLayout()
-        self.frame_grid.setColumnStretch(0, 0)
-        self.frame_grid.setColumnStretch(1, 0)
-        self.frame_grid.setColumnStretch(2, 1)
-        self.setLayout(self.frame_grid)
+        self.grid_layout = QGridLayout()
+        self.grid_layout.setColumnStretch(0, 0)
+        self.grid_layout.setColumnStretch(1, 0)
+        self.grid_layout.setColumnStretch(2, 1)
+        self.setLayout(self.grid_layout)
         self.host_edit = QLineEdit("127.0.0.1")
-        self.host_edit.setMinimumWidth(120)
-        self.frame_grid.addWidget(self.host_edit, 0, 0)
+        self.host_edit.setMinimumWidth(100)
+        self.grid_layout.addWidget(self.host_edit, 0, 0)
         self.status_light = QPushButton()
         self.status_light.setStyleSheet(self.StyleDisabled)
         self.status_light.setFixedSize(24, 24)
-        self.frame_grid.addWidget(self.status_light, 0, 1)
+        self.grid_layout.addWidget(self.status_light, 0, 1)
         self.title_font = QFont()
         self.title_font.setWeight(QFont.Black)
         self.title_font.setPointSize(16)
@@ -279,20 +249,20 @@ class NodePanel(QFrame):
         self.title = QLabel("Not connected")
         self.title.setFont(self.title_font)
         self.title.setAlignment(Qt.AlignCenter)
-        self.frame_grid.addWidget(self.title, 0, 2)
+        self.grid_layout.addWidget(self.title, 0, 2)
         self.status_bar = QStatusBar()
-        self.frame_grid.addWidget(self.status_bar, 4, 0, 1, 4)
+        self.grid_layout.addWidget(self.status_bar, 5, 0, 1, 4)
         self.connect_btn = QPushButton("Connect")
         self.reconnect_btn = QPushButton("Reconnect")
         self.disconnect_btn = QPushButton("Disconnect")
         self.close_btn = QPushButton("X")
         self.close_btn.setFixedSize(24, 24)
-        self.frame_grid.addWidget(self.connect_btn, 1, 0, 1, 2)
-        self.frame_grid.addWidget(self.reconnect_btn, 2, 0, 1, 2)
-        self.frame_grid.addWidget(self.disconnect_btn, 3, 0, 1, 2)
-        self.frame_grid.addWidget(self.close_btn, 0, 3, 1, 2)
-        self.node_grid = NodeGrid(self)
-        self.frame_grid.addLayout(self.node_grid, 1, 2, 3, 1)
+        self.grid_layout.addWidget(self.connect_btn, 1, 0,)
+        self.grid_layout.addWidget(self.reconnect_btn, 2, 0)
+        self.grid_layout.addWidget(self.disconnect_btn, 3, 0)
+        self.grid_layout.addWidget(self.close_btn, 0, 3, 1, 2)
+        self.dev_layout = QVBoxLayout()
+        self.grid_layout.addLayout(self.dev_layout, 1, 1, 4, 3)
 
         self.connect_btn.clicked.connect(self.connect)
         self.disconnect_btn.clicked.connect(self.disconnect)
@@ -310,20 +280,21 @@ class NodePanel(QFrame):
             Returns: None
             """
         self.device_list.clear()
-        self.node_grid.clear_all()
+        while self.dev_layout.count():
+            child = self.dev_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
     def generate_panel(self):
         """Populate the panel by the description node link.
             Returns: None
             """
-        self.status_light.setStyleSheet(self.StyleReady)
-        self.ready = True
         self.title.setText(self.desc_link.node_name)
-
         for dev_link in self.desc_link.device_links:
-            device = self.node_grid.add_device_panel(dev_link)
-            self.device_list.append(device)
+            device =  DevicePanel(self, dev_link)
             device.generate_panel()
+            self.device_list.append(device)
+            self.dev_layout.addWidget(device)
 
     @pyqtSlot()
     def connect(self):
@@ -367,11 +338,12 @@ class NodePanel(QFrame):
             # Didn't receive a valid node description link
             return
         self.desc_link = node_link
-
         self.generate_panel()
 
         self.socket.readyRead.disconnect(self.connection_made)
         self.socket.readyRead.connect(self.exec_node_link)
+        self.status_light.setStyleSheet(self.StyleReady)
+        self.ready = True
         self.status_bar.showMessage("Ready")
         self.socket.write("RDY".encode("utf-8"))
 
