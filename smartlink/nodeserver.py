@@ -41,7 +41,7 @@ class SmartlinkControl(protocol.Protocol):
         except:
             logger.warn("{prefix} failed to execute operation from {peer}".\
                 format(prefix=self.logPrefix(), peer=self.transport.getPeer()))
-            raise
+            #raise
 
 class SmartlinkFactory(protocol.Factory):
     """Twisted factory class for smartlink node server."""
@@ -178,7 +178,8 @@ class Device:
             link.name = op.name
             link.desc = op.desc
             if op.args is not None:
-                link.args.extend(op.args)
+                for arg in op.args:
+                    link.args.append(str(arg))
         for op in self.node_oplist:
             link = dev_link.links.add()
             link.target = link_pb2.Link.NODE
@@ -186,7 +187,8 @@ class Device:
             link.name = op.name
             link.desc = op.desc
             if op.args is not None:
-                link.args.extend(op.args)
+                for arg in op.args:
+                    link.args.append(str(arg))
         return dev_link
 
 

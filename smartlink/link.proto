@@ -8,7 +8,7 @@ message Link {
     Target target = 1;
     uint32 id = 2;
     string name = 3;
-    string desc = 4;
+    string desc = 4;    // Describe the signature of operation
     repeated string args = 5;
 }
 

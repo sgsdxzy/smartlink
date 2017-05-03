@@ -4,6 +4,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtNetwork import *
 
 from smartlink import link_pb2
+from smartlink.widgets import *
 
 class DevicePanel(QGroupBox):
     """A subpanel to display device status and receive control from user. It is
@@ -63,71 +64,18 @@ class DevicePanel(QGroupBox):
         self.row_list[-1].addWidget(widget)
         self.col_index += len(widget)
 
-class StrWidget(QLineEdit):
-    """Widget for handling "str" type argument."""
-    def __init__(self, ext_args=None):
-        super().__init__(self)
-        self.setMinimumWidth(50)
-
-    def exec_arg(self, arg):
-        self.setText(arg)
-
-    def get_arg(self):
-        return self.text()
-
-
-class NumWidget(QLineEdit):
-    """Widget for handling "num" type argument."""
-    def __init__(self, ext_args=None):
-        super().__init__("0")
-        self.setMinimumWidth(50)
-        self.validator = QDoubleValidator()
-        self.setValidator(self.validator)
-
-    def exec_arg(self, arg):
-        self.setText(arg)
-
-    def get_arg(self):
-        return self.text()
-
-
-class BoolWidget(QPushButton):
-    """Widget for handling "bool" type argument."""
-    StyleTrue = "QPushButton { color: #000000; background-color : #00FF00}"
-    StyleFalse = "QPushButton { color: #FFFFFF; background-color : #FF0000}"
-    StyleDisabled = "QPushButton { color: #FFFFFF; background-color : #808080}"
-    def __init__(self, ext_args=None):
-        super().__init__("DISABLED")
-        self.state = None
-        self.setStyleSheet(self.StyleDisabled)
-        self.setMaximumWidth(64)
-
-    def exec_arg(self, arg):
-        if arg in ["1", "T", "True", "Y", "t", "true"]:
-            self.setStyleSheet(self.StyleTrue)
-            self.setText("ON")
-            self.setChecked(True)
-            self.state = True
-        else:
-            self.setStyleSheet(self.StyleFalse)
-            self.setText("OFF")
-            self.setChecked(False)
-            self.state = False
-
-    def get_arg(self):
-        if self.state:
-            return "1"
-        else:
-            return "0"
-
 
 class OperationWidget(QFrame):
     """A widget to handle a link operation."""
-    arg_widget_dict = {
-        "num": NumWidget,
-        "bool": BoolWidget,
-        "str": StrWidget
+    ctrl_widget_dict = {
+        "str": CtrlStrWidget,
+        "float": CtrlFloatWidget,
+        "bool": CtrlBoolWidget,
         }
+    node_widget_dict = {
+        "str": NodeStrWidget,
+        "float": NodeFloatWidget,
+    }
 
     def __init__(self, device, desc_link):
         super().__init__()
@@ -147,41 +95,73 @@ class OperationWidget(QFrame):
         return len(self.all_widget_list)
 
     def generate(self):
-        """Parse link.desc and generate corresponding widgets. First is a QLabel
-            of link.name. link.desc should describe the signature of the concrete
-            node function. desc is a string containing arbitrary number of one
-            of the following to indicate argument type, separated by single space:
-                num : a NumWidget
-                bool : a BoolWidget
-                str : a StrWidget
-            Additional Widgets is generated according to argument type in
-            link.desc. These Widgets should implement `exec_arg(str)` to execute a
-            control operation and `str get_arg()` to get control arg.
-            link.args is passed to __init__ as extra args.
-            if an argument type is unknown, an StrWidget is generated.
-            If link.target is link_pb2.Link.NODE, a QPushButton is
-            appended at the end to send the control command.
+        """Parse link.desc and generate corresponding widgets. Link.desc should
+            describe the signature of operation. desc is a string containing
+            arbitrary number of types separated by single space. Depending on
+            whether the operation is on control or node, different widgets are
+            generated for operation argument types.
+            Currently the following types are implemented for control operation:
+                #int : a CtrlIntWidget
+                float : a CtrlFloatWidget
+                #bool : a CtrlBoolWidget
+                str : a CtrlStrWidget
+            The following types are implemented for node operation:
+                #int : a NodeIntWidget
+                float : a NodeFloatWidget
+                #bool : a NodeBoolWidget
+                str : a NodeStrWidget
+            Control operation widgets should implement `exec_arg(str)` to
+            execute a control operation. Node operation widgets should implement
+             `str get_arg()` to get args for node operation.
+            link.args[i] is passed to i-th widget's __init__ as extra args.
+
             Returns: None
             """
         arg_type_list = self.desc_link.desc.split()
-        if len(arg_type_list) != 0:
+        if self.desc_link.target == link_pb2.Link.CONTROL:
             label = QLabel(self.desc_link.name)
             self.all_widget_list.append(label)
-            ext_args = self.desc_link.args[:]
-            for arg_type in arg_type_list:
-                widget = self.arg_widget_dict.get(arg_type, StrWidget)(ext_args)
-                self.exec_widget_list.append(widget)
-                self.all_widget_list.append(widget)
-
-        if self.desc_link.target == link_pb2.Link.NODE:
-            if len(arg_type_list) != 0:
-                button = QPushButton("Apply")
+            if len(self.desc_link.args) >= len(arg_type_list):
+                for i in range(len(arg_type_list)):
+                    arg_type = arg_type_list[i]
+                    ext_args = self.desc_link.args[i]
+                    widget = self.ctrl_widget_dict.get(arg_type, StrWidget)(ext_args)
+                    self.exec_widget_list.append(widget)
+                    self.all_widget_list.append(widget)
             else:
+                for i in range(len(arg_type_list)):
+                    arg_type = arg_type_list[i]
+                    widget = self.ctrl_widget_dict.get(arg_type, StrWidget)()
+                    self.exec_widget_list.append(widget)
+                    self.all_widget_list.append(widget)
+
+        else: # self.desc_link.target == link_pb2.Link.NODE:
+            if len(arg_type_list) != 0:
+                label = QLabel(self.desc_link.name)
+                self.all_widget_list.append(label)
+                if len(self.desc_link.args) >= len(arg_type_list):
+                    for i in range(len(arg_type_list)):
+                        arg_type = arg_type_list[i]
+                        ext_args = self.desc_link.args[i]
+                        widget = self.node_widget_dict.get(arg_type, StrWidget)(ext_args)
+                        self.exec_widget_list.append(widget)
+                        self.all_widget_list.append(widget)
+                else:
+                    for i in range(len(arg_type_list)):
+                        arg_type = arg_type_list[i]
+                        widget = self.node_widget_dict.get(arg_type, StrWidget)()
+                        self.exec_widget_list.append(widget)
+                        self.all_widget_list.append(widget)
+
+                button = QPushButton("Apply")
+                button.clicked.connect(self.uplink)
+                self.all_widget_list.append(button)
+
+            else: # No operation argument require, generate a single button with name
                 button = QPushButton(self.desc_link.name)
-            button.clicked.connect(self.uplink)
-            self.all_widget_list.append(button)
-        elif self.desc_link.target == link_pb2.Link.CONTROL:
-            pass
+                button.clicked.connect(self.uplink)
+                self.all_widget_list.append(button)
+
         for widget in self.all_widget_list:
             self.layout.addWidget(widget)
 
