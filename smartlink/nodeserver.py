@@ -79,7 +79,21 @@ class SmartlinkFactory(protocol.Factory):
             # Client lost connection before it is ready
             pass
 
-Operation = namedtuple('Operation', ['id', 'name', 'desc', 'func', 'args'])
+class Operation:
+    """Storing the information of an operation."""
+    __slots__ = ['id', 'name', 'desc', 'func', 'args', 'auto']
+    def __init__(self, id, name, desc, func, args=None, auto=-1):
+        """auto=1 means LoopingCall executes the associated func and get
+            update link on every interval. auto=0 disable this. auto=-1 means
+            parameter no applicable (for node operation). auto>1 is for internal
+            use. auto=2 indicates a oneshot.
+            """
+        self.id = id
+        self.name = name
+        self.desc = desc
+        self.func = func
+        self.args = args
+        self.auto = auto
 
 class Device:
     """A node device is the basic unit of operation execution.
@@ -95,33 +109,47 @@ class Device:
         self.node_oplist = []
         self.dev_id = None
 
-    def add_ctrl_op(self, name, desc, func, args=None):
+    def add_ctrl_op(self, name, desc, func, args=None, auto=1):
         """Add one operation to be executed on control. func is the local
-            function to generate arguments. args must be a sequence of strings
-            and provides additional information about func to control.
+            function to generate arguments.  args must be a sequence of strings
+            and provides ext_args to generate corresponding widget. if auto is
+            0 then LoopingCall does not execute the associated func and get
+            update link on every interval.
+
             Returns: the operation's id.
             """
         op_id = len(self.ctrl_oplist)
-        op = Operation(op_id, name, desc, func, args)
+        op = Operation(op_id, name, desc, func, args, auto)
         self.ctrl_oplist.append(op)
         return op_id
 
     def add_ctrl_ops(self, oplist):
         """Add multiple operations to be executed on control. oplist is
-            a list of (name, desc, func, args) tuples.
+            a list of (name, desc, func, args, auto) tuples.
+
             Returns: None
             """
         for op in oplist:
             self.add_ctrl_op(*op)
 
+    def oneshot(self, op_id):
+        """On next LoopingCall interval, execute the associated func of control
+            operation with id op_id and send the result to control.
+
+            Returns: None
+            """
+        if self.ctrl_oplist[op_id].auto == 0:
+            self.ctrl_oplist[op_id].auto = 2
+
     def add_node_op(self, name, desc, func, args=None):
         """Add one operation to be executed on node. func is the local
             function to execute the operation. args must be a sequence of strings
-            and provides additional information about func to control.
+            and provides ext_args to generate corresponding widget.
+
             Returns: the operation's id.
             """
         op_id = len(self.node_oplist)
-        op = Operation(op_id, name, desc, func, args)
+        op = Operation(op_id, name, desc, func, args, -1)
         self.node_oplist.append(op)
         return op_id
 
@@ -142,11 +170,14 @@ class Device:
         if self.dev_id is not None:
             dev_link.device_id = self.dev_id
         for op in self.ctrl_oplist:
-            link = dev_link.links.add()
-            link.id = op.id
-            args = op.func()
-            if args is not None:
-                link.args.append(str(args))
+            if op.auto > 0:
+                link = dev_link.links.add()
+                link.id = op.id
+                args = op.func()
+                if args is not None:
+                    link.args.append(str(args))
+            if op.auto == 2: # oneshot
+                op.auto = 0
         return dev_link
 
     def exec_dev_link(self, dev_link):

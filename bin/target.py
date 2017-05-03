@@ -1,4 +1,4 @@
-from twisted.internet import reactor
+from twisted.internet import reactor, task
 from smartlink import nodeserver
 
 global position
@@ -21,7 +21,7 @@ def main():
     x_st.add_node_op("Move", "float", lambda args:set_position(0, args))
     x_st.add_node_op("Initialize", "", lambda:init(0))
     y_st = nodeserver.Device("Y", "Y axis stepper motor")
-    y_st.add_ctrl_op("Position", "float", lambda:get_position(1))
+    op_id = y_st.add_ctrl_op("Position", "float", lambda:get_position(1), auto=False)
     y_st.add_ctrl_op("In", "bool", lambda:abs(get_position(1)-10)<1)
     y_st.add_node_op("Move", "float", lambda args:set_position(1, args), [10])
     z_st = nodeserver.Device("Z", "Z axis stepper motor")
@@ -32,6 +32,8 @@ def main():
     node.add_devices([x_st, y_st, z_st])
 
     factory = nodeserver.SmartlinkFactory(node, 1)
+    lc = task.LoopingCall(lambda: y_st.oneshot(op_id))
+    lc.start(5)
     nodeserver.start(reactor, factory, 5362)
 
 if __name__ == "__main__":
