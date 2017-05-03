@@ -8,6 +8,7 @@ class StrWidget(QLineEdit):
     """Widget for handling "str" type argument."""
     def __init__(self, ext_args=None):
         super().__init__()
+        self.setMinimumWidth(40)
         if ext_args is not None:
             self.setText(ext_args)
 

@@ -20,7 +20,7 @@ class DevicePanel(QGroupBox):
         self.node_op_list = []
 
         self.setCheckable(True)
-        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
         self.row_list = [QHBoxLayout()]
@@ -221,6 +221,7 @@ class NodePanel(QFrame):
         self.grid_layout.setColumnStretch(0, 0)
         self.grid_layout.setColumnStretch(1, 0)
         self.grid_layout.setColumnStretch(2, 1)
+        self.grid_layout.setColumnStretch(3, 0)
         self.setLayout(self.grid_layout)
         self.host_edit = QLineEdit("127.0.0.1")
         self.host_edit.setMinimumWidth(100)

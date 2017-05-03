@@ -25,6 +25,13 @@ class SmartlinkControl(protocol.Protocol):
             try:
                 if data.decode("utf-8") == "RDY":
                     self.client_ready = True
+
+                    # Send a full link
+                    node_link = self.factory.node.get_full_node_link()
+                    str_link = node_link.SerializeToString()
+                    self.transport.write(str_link)
+
+                    # Ready for broadcast
                     self.factory.clientReady(self)
             except:
                 # Client didn't send "RDY" to notify that it is ready for broadcast
@@ -41,7 +48,7 @@ class SmartlinkControl(protocol.Protocol):
         except:
             logger.warn("{prefix} failed to execute operation from {peer}".\
                 format(prefix=self.logPrefix(), peer=self.transport.getPeer()))
-            #raise
+            raise
 
 class SmartlinkFactory(protocol.Factory):
     """Twisted factory class for smartlink node server."""
@@ -81,19 +88,24 @@ class SmartlinkFactory(protocol.Factory):
 
 class Operation:
     """Storing the information of an operation."""
-    __slots__ = ['id', 'name', 'desc', 'func', 'args', 'auto']
-    def __init__(self, id, name, desc, func, args=None, auto=-1):
-        """auto=1 means LoopingCall executes the associated func and get
-            update link on every interval. auto=0 disable this. auto=-1 means
-            parameter no applicable (for node operation). auto>1 is for internal
-            use. auto=2 indicates a oneshot.
+    AUTO = 1
+    FULL = 0
+    MANUAL = -1
+    __slots__ = ['id', 'name', 'desc', 'func', 'args', 'mask']
+    def __init__(self, op_id, name, desc, func, args=None, mask=-1):
+        """mask=1 means the associated func is executed on every link by
+            LoopingCall. mask=0 disable this, but it is still
+            executed on a full link (for example, the first update link after
+            connection is made). mask=-1 means it is never automatically
+            executed. mask>1 is for internal use. mask=2 indicates a oneshot of
+            mask=0, and mask=3 indicates a oneshot of mask=-1.
             """
-        self.id = id
+        self.id = op_id
         self.name = name
         self.desc = desc
         self.func = func
         self.args = args
-        self.auto = auto
+        self.mask = mask
 
 class Device:
     """A node device is the basic unit of operation execution.
@@ -109,23 +121,23 @@ class Device:
         self.node_oplist = []
         self.dev_id = None
 
-    def add_ctrl_op(self, name, desc, func, args=None, auto=1):
+    def add_ctrl_op(self, name, desc, func, args=None, mask=1):
         """Add one operation to be executed on control. func is the local
             function to generate arguments.  args must be a sequence of strings
-            and provides ext_args to generate corresponding widget. if auto is
+            and provides ext_args to generate corresponding widget. if mask is
             0 then LoopingCall does not execute the associated func and get
             update link on every interval.
 
             Returns: the operation's id.
             """
         op_id = len(self.ctrl_oplist)
-        op = Operation(op_id, name, desc, func, args, auto)
+        op = Operation(op_id, name, desc, func, args, mask)
         self.ctrl_oplist.append(op)
         return op_id
 
     def add_ctrl_ops(self, oplist):
         """Add multiple operations to be executed on control. oplist is
-            a list of (name, desc, func, args, auto) tuples.
+            a list of (name, desc, func, args, mask) tuples.
 
             Returns: None
             """
@@ -138,8 +150,10 @@ class Device:
 
             Returns: None
             """
-        if self.ctrl_oplist[op_id].auto == 0:
-            self.ctrl_oplist[op_id].auto = 2
+        if self.ctrl_oplist[op_id].mask == 0:
+            self.ctrl_oplist[op_id].mask = 2
+        elif self.ctrl_oplist[op_id].mask == -1:
+            self.ctrl_oplist[op_id].mask = 3
 
     def add_node_op(self, name, desc, func, args=None):
         """Add one operation to be executed on node. func is the local
@@ -164,20 +178,46 @@ class Device:
     def get_dev_link(self, node_link):
         """Execute operations in ctrl_oplist to get args and wrap them in a
             device link, then append it to node_link.
+
             Returns: the created link_pb2.DeviceLink
         """
         dev_link = node_link.device_links.add()
         if self.dev_id is not None:
             dev_link.device_id = self.dev_id
         for op in self.ctrl_oplist:
-            if op.auto > 0:
+            if op.mask > 0:
                 link = dev_link.links.add()
                 link.id = op.id
                 args = op.func()
                 if args is not None:
                     link.args.append(str(args))
-            if op.auto == 2: # oneshot
-                op.auto = 0
+            if op.mask == 2: # oneshot
+                op.mask = 0
+            elif op.mask == 3:
+                op.mask = -1
+        return dev_link
+
+    def get_full_dev_link(self, node_link):
+        """Execute operations in ctrl_oplist to get args and wrap them in a
+            device link, then append it to node_link. This executes even mask=0
+            operations.
+
+            Returns: the created link_pb2.DeviceLink
+        """
+        dev_link = node_link.device_links.add()
+        if self.dev_id is not None:
+            dev_link.device_id = self.dev_id
+        for op in self.ctrl_oplist:
+            if op.mask >= 0:
+                link = dev_link.links.add()
+                link.id = op.id
+                args = op.func()
+                if args is not None:
+                    link.args.append(str(args))
+            if op.mask == 2: # oneshot
+                op.mask = 0
+            elif op.mask == 3:
+                op.mask = -1
         return dev_link
 
     def exec_dev_link(self, dev_link):
@@ -244,6 +284,7 @@ class Node:
 
     def add_devices(self, device_list):
         """Add a list of devices to node and assign them their id.
+
             Returns: None
             """
         for dev in device_list:
@@ -251,11 +292,23 @@ class Node:
 
     def get_node_link(self):
         """Get device links from devices and wrap them into a node link.
+
             Returns: link_pb2.NodeLink
         """
         node_link = link_pb2.NodeLink()
         for dev in self.device_list:
             dev.get_dev_link(node_link)
+        return node_link
+
+    def get_full_node_link(self):
+        """Get device links from devices and wrap them into a node link. This
+            generates a full link.
+
+            Returns: link_pb2.NodeLink
+        """
+        node_link = link_pb2.NodeLink()
+        for dev in self.device_list:
+            dev.get_full_dev_link(node_link)
         return node_link
 
     def exec_node_link(self, node_link):
