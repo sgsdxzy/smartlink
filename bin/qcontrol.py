@@ -27,6 +27,7 @@ class ControlPanel(QWidget):
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyle(QStyleFactory.create("windows"))
     panel = ControlPanel()
     panel.show()
     sys.exit(app.exec_())

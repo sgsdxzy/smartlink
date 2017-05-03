@@ -17,13 +17,15 @@ class DevicePanel(QGroupBox):
         self.maxlen = maxlen
         self.ctrl_op_list = []
         self.node_op_list = []
-        self.initUI()
 
-    def initUI(self):
-        self.grid_layout = QGridLayout()
-        self.setLayout(self.grid_layout)
-        self.row_index = 0
+        self.setCheckable(True)
+        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+        self.row_list = [QHBoxLayout()]
+        self.layout.addLayout(self.row_list[-1])
         self.col_index = 0
+        self.setFont(self.node.dev_title_font)
 
     def generate_panel(self):
         """Populate the panel by the description device link dev_link.
@@ -34,9 +36,10 @@ class DevicePanel(QGroupBox):
             widget = OperationWidget(self, link)
             if link.target == link_pb2.Link.CONTROL:
                 self.ctrl_op_list.append(widget)
-            elif link.target == link_pb2.Link.NODE:
+            else: # link.target == link_pb2.Link.NODE:
                 self.node_op_list.append(widget)
             self.append_widget(widget)
+        self.row_list[-1].addStretch(1)
 
     def exec_dev_link(self, dev_link):
         """Execute device link on control. This is usually an status update.
@@ -53,9 +56,11 @@ class DevicePanel(QGroupBox):
             Returns: None
             """
         if self.col_index + len(widget) > self.maxlen:
-            self.row_index += 1
+            self.row_list[-1].addStretch(1)
+            self.row_list.append(QHBoxLayout())
+            self.layout.addLayout(self.row_list[-1])
             self.col_index = 0
-        self.grid_layout.addWidget(widget, self.row_index, self.col_index)
+        self.row_list[-1].addWidget(widget)
         self.col_index += len(widget)
 
 class StrWidget(QLineEdit):
@@ -95,15 +100,18 @@ class BoolWidget(QPushButton):
         super().__init__("DISABLED")
         self.state = None
         self.setStyleSheet(self.StyleDisabled)
+        self.setMaximumWidth(64)
 
     def exec_arg(self, arg):
         if arg in ["1", "T", "True", "Y", "t", "true"]:
             self.setStyleSheet(self.StyleTrue)
             self.setText("ON")
+            self.setChecked(True)
             self.state = True
         else:
             self.setStyleSheet(self.StyleFalse)
             self.setText("OFF")
+            self.setChecked(False)
             self.state = False
 
     def get_arg(self):
@@ -113,7 +121,7 @@ class BoolWidget(QPushButton):
             return "0"
 
 
-class OperationWidget(QWidget):
+class OperationWidget(QFrame):
     """A widget to handle a link operation."""
     arg_widget_dict = {
         "num": NumWidget,
@@ -123,13 +131,14 @@ class OperationWidget(QWidget):
 
     def __init__(self, device, desc_link):
         super().__init__()
+        self.setFrameStyle(QFrame.StyledPanel|QFrame.Plain)
+        self.setLineWidth(1)
         self.device = device
         self.desc_link = desc_link
         self.exec_widget_list = []
         self.all_widget_list = []
-        self.initUI()
 
-    def initUI(self):
+        self.setFont(self.device.node.default_font)
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
         self.generate()
@@ -225,7 +234,7 @@ class NodePanel(QFrame):
         self.initUI()
 
     def initUI(self):
-        self.setFrameStyle(QFrame.Box|QFrame.Raised)
+        self.setFrameStyle(QFrame.Panel|QFrame.Raised)
         self.setLineWidth(2)
 
         self.grid_layout = QGridLayout()
@@ -245,7 +254,11 @@ class NodePanel(QFrame):
         self.title_font.setPointSize(16)
         self.dev_title_font = QFont()
         self.dev_title_font.setWeight(QFont.Bold)
-        self.dev_title_font.setPointSize(14)
+        self.dev_title_font.setPointSize(12)
+        self.default_font = QFont()
+        self.default_font.setWeight(QFont.Normal)
+        self.default_font.setPointSize(10)
+        #self.setFont(self.default_font)
         self.title = QLabel("Not connected")
         self.title.setFont(self.title_font)
         self.title.setAlignment(Qt.AlignCenter)
