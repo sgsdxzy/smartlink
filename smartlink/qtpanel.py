@@ -261,6 +261,7 @@ class NodePanel(QFrame):
         self.connect_btn.clicked.connect(self.connect)
         self.disconnect_btn.clicked.connect(self.disconnect)
         self.reconnect_btn.clicked.connect(self.reconnect)
+        self.close_btn.clicked.connect(self.close)
 
     def reset_socket_slots(self):
         """Disconnect all slots of self.socket
@@ -386,3 +387,10 @@ class NodePanel(QFrame):
         self.ready = False
         self.status_bar.showMessage(self.socket.errorString())
         self.status_light.setStyleSheet(self.StyleError)
+
+    @pyqtSlot()
+    def close(self):
+        if self.socket.state() != QAbstractSocket.UnconnectedState:
+            self.status_bar.showMessage("Please disconnect before closing panel")
+        else:
+            self.deleteLater()

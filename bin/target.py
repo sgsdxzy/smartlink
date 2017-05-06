@@ -39,7 +39,7 @@ def main():
     z_st.add_ctrl_op("In", "bool", lambda:abs(get_position(2)-10)<1)
     z_st.add_node_op("Move", "float", lambda args:set_position(2, args))
     #y_st.add_node_op("INIT", "", lambda args:init(1))
-    node.add_devices([x_st])
+    node.add_devices([x_st, y_st, z_st])
 
     factory = nodeserver.SmartlinkFactory(node, 1)
     nodeserver.start(reactor, factory, 5362)

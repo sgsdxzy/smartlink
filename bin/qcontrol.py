@@ -15,14 +15,22 @@ class ControlPanel(QWidget):
     def initUI(self):
         self.setWindowTitle("Smartlink Control Panel")
 
-        self.grid = QGridLayout()
-        self.setLayout(self.grid)
+        self.layout = QHBoxLayout()
+        self.setLayout(self.layout)
+        self.left = QVBoxLayout()
+        self.right = QVBoxLayout()
+        self.layout.addLayout(self.left)
+        self.layout.addLayout(self.right)
 
-        self.grid.addWidget(NodePanel(), 0, 0)
-        self.grid.addWidget(NodePanel(), 0, 1)
-        self.grid.addWidget(NodePanel(), 1, 0)
-        self.grid.addWidget(NodePanel(), 1, 1)
+        self.left.addWidget(NodePanel())
+        self.left.addStretch()
+        self.left.addWidget(NodePanel())
+        self.left.addStretch()
 
+        self.right.addWidget(NodePanel())
+        self.right.addStretch()
+        self.right.addWidget(NodePanel())
+        self.right.addStretch()
 
 
 def main():
