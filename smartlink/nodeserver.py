@@ -27,7 +27,7 @@ class SmartlinkControl(protocol.Protocol):
                     self.client_ready = True
 
                     # Send a full link
-                    node_link = self.factory.node.get_full_node_link()
+                    node_link = self.factory.node.get_full_link()
                     str_link = node_link.SerializeToString()
                     self.transport.write(str_link)
 
@@ -44,7 +44,7 @@ class SmartlinkControl(protocol.Protocol):
                 format(prefix=self.logPrefix(), peer=self.transport.getPeer()))
             return
         try:
-            self.factory.node.exec_node_link(node_link)
+            self.factory.node.execute(node_link)
         except:
             logger.warn("{prefix} failed to execute operation from {peer}".\
                 format(prefix=self.logPrefix(), peer=self.transport.getPeer()))
@@ -56,7 +56,7 @@ class SmartlinkFactory(protocol.Factory):
     def __init__(self, node, frequency=1):
         self.broadcast = []
         self.node = node
-        self.desc_link = node.generate_node_desclink()
+        self.desc_link = node.get_desc_link()
         #print(self.desc_link)
         self.str_desc = self.desc_link.SerializeToString()
         self.loopcall = task.LoopingCall(self.announce)
@@ -66,7 +66,7 @@ class SmartlinkFactory(protocol.Factory):
         """Broadcast node link to all connected and ready controls.
             This is usually used for updating node status.
             """
-        node_link = self.node.get_node_link()
+        node_link = self.node.get_link()
         str_link = node_link.SerializeToString()
         #print(len(str_link))
         #print(node_link)
@@ -86,201 +86,281 @@ class SmartlinkFactory(protocol.Factory):
             # Client lost connection before it is ready
             pass
 
-class Operation:
-    """Storing the information of an operation."""
-    AUTO = 1
-    FULL = 0
-    MANUAL = -1
-    __slots__ = ['id', 'name', 'desc', 'func', 'args', 'mask']
-    def __init__(self, op_id, name, desc, func, args=None, mask=-1):
-        """mask=1 means the associated func is executed on every link by
-            LoopingCall. mask=0 disable this, but it is still
-            executed on a full link (for example, the first update link after
-            connection is made). mask=-1 means it is never automatically
-            executed. mask>1 is for internal use. mask=2 indicates a oneshot of
-            mask=0, and mask=3 indicates a oneshot of mask=-1.
-            """
-        self.id = op_id
+class Command:
+    """Command is the type of operation sent by control to be executed on node."""
+
+    def __init__(self, name, sig, func, ext_args=None):
+        self.id = -1
+        self.name = name
+        self.sig = sig
+        self.func = func
+        self.ext_args = ext_args
+
+    def execute(self, link):
+        """Call the associated func and return the result."""
+        return self.func(link.data)
+
+    def get_desc_link(self, grp_link):
+        """Generate a description link to describe this Command, then append it to grp_link.
+
+        Returns: the created link_pb2.Link
+        """
+        link = grp_link.links.add()
+        link.type = link_pb2.Link.COMMAND
+        link.id = self.id
+        link.name = self.name
+        link.sig = self.sig
+        if self.ext_args is not None:
+            link.data = self.ext_args
+
+class Update:
+    """Update is the type of operation executed on node to display the result on
+    control.
+    """
+
+    def __init__(self, name, sig, func, ext_args=None):
+        self.id = -1
+        self.name = name
+        self.sig = sig
+        self.func = func
+        self.ext_args = ext_args
+        self.old = None
+
+    def get_link(grp_link):
+        """Execute the associated func and if the result is different from prev,
+        wrap the result in a link_pb2.Link and append it to grp_link.
+
+        Returns: the created link_pb2.Link if has new result or None
+        """
+        new = self.func()
+        if new == self.old:
+            return None
+        else:
+            self.old = new
+            if isinstance(new, tuple):
+                #func() returns multiple results
+                new = ';'.join(str(result) for result in new)
+            else:
+                new = str(new)
+
+            link = grp_link.links.add()
+            link.id = self.id
+            link.data = new
+            return link
+
+    def get_full_link(grp_link):
+        """Execute the associated func, wrap the result in a link_pb2.Link and
+        append it to grp_link.
+
+        Returns: the created link_pb2.Link
+        """
+        new = self.func()
+        if isinstance(new, tuple):
+            #func() returns multiple results
+            new = ';'.join(str(result) for result in new)
+        else:
+            new = str(new)
+
+        link = grp_link.links.add()
+        link.id = self.id
+        link.data = new
+        return link
+
+    def get_desc_link(grp_link):
+        """Generate a description link to describe this Update, then append it to grp_link.
+
+        Returns: the created link_pb2.Link
+        """
+        link = grp_link.links.add()
+        link.type = link_pb2.Link.UPDATE
+        link.id = self.id
+        link.name = self.name
+        link.sig = self.sig
+        if self.ext_args is not None:
+            link.args = self.ext_args
+
+
+class OperationGroup:
+    """An OperationGroup is a group of interrelated Commands or Updates whose
+    generated UI on control should be grouped together.
+    """
+
+    def __init__(self, name, desc=None):
+        self.id = -1
         self.name = name
         self.desc = desc
-        self.func = func
-        self.args = args
-        self.mask = mask
+        self.commands = []
+        self.updates = []
+
+    def add_command(self, command):
+        """Add a Command to this group and assign the Command its id.
+
+        Returns: assigned id
+        """
+        cmd_id = len(self.commands)
+        command.id = cmd_id
+        self.commands.append(command)
+        return cmd_id
+
+    def add_update(self, update):
+        """Add an Update to this group and assign the Update its id.
+
+        Returns: assigned id
+        """
+        update_id = len(self.updates)
+        update.id = update_id
+        self.updates.append(update)
+        return update_id
+
+    def get_link(self, dev_link):
+        """Get updates from the list of Updates, wrap them in a GroupLink, then
+        append them to dev_link.
+
+        Returns: the created link_pb2.GroupLink
+        """
+        grp_link = dev_link.grp_links.add()
+        for update in self.updates:
+            update.get_link(grp_link)
+        if len(grp_link.links) > 0:
+            grp_link.id = self.id
+        return grp_link
+
+    def get_full_link(self, dev_link):
+        """Get full updates from the list of Updates, wrap them in a GroupLink,
+        then append them to dev_link.
+
+        Returns: the created link_pb2.GroupLink
+        """
+        grp_link = dev_link.grp_links.add()
+        grp_link.id = self.id
+        for update in self.updates:
+            update.get_link(grp_link)
+        return grp_link
+
+    def get_desc_link(self, dev_link):
+        """Generate a description link to describe this OperationGroup, then
+        append it to dev_link.
+
+        Returns: the created link_pb2.GroupLink
+        """
+        grp_link = dev_link.grp_links.add()
+        grp_link.id = self.id
+        grp_link.name = self.name
+        grp_link.desc = self.desc
+        for update in self.updates:
+            update.get_desc_link(grp_link)
+        for cmd in self.commands:
+            cmd.get_desc_link(grp_link)
+        return grp_link
+
+    def execute(self, grp_link):
+        """Handle links in grp_link to corresponding Commands and executes them.
+
+        Returns: None
+        """
+        for link in grp_link.links:
+            cmd = self.commands[link.id]
+            cmd.execute(link)
+
 
 class Device:
-    """A node device is the basic unit of operation execution.
-        It executes operations in ctrl_oplist to get args and wraps them in a device
-        link. This is usually used for generating status update for control.
-        It parses incoming operation device links, looks up corresponding methods
-        in node_oplist and executes them.
-        """
-    def __init__(self, name, desc):
+    """A Device is the programming correspondence to a physical device. It may
+    contain one or more OperationGroups. Device is the basic unit for configuration
+    saving/loading and logging.
+    """
+    def __init__(self, name, desc=None):
+        self.id = None
         self.name = name
         self.desc = desc
-        self.ctrl_oplist = []
-        self.node_oplist = []
-        self.dev_id = None
+        self.groups = []
 
-    def add_ctrl_op(self, name, desc, func, args=None, mask=1):
-        """Add one operation to be executed on control. func is the local
-            function to generate arguments.  args must be a sequence of strings
-            and provides ext_args to generate corresponding widget. if mask is
-            0 then LoopingCall does not execute the associated func and get
-            update link on every interval.
+    def create_group(self, name, desc=None):
+        """Create a new OperationGroup with name and desc.
 
-            Returns: the operation's id.
-            """
-        op_id = len(self.ctrl_oplist)
-        op = Operation(op_id, name, desc, func, args, mask)
-        self.ctrl_oplist.append(op)
-        return op_id
-
-    def add_ctrl_ops(self, oplist):
-        """Add multiple operations to be executed on control. oplist is
-            a list of (name, desc, func, args, mask) tuples.
-
-            Returns: None
-            """
-        for op in oplist:
-            self.add_ctrl_op(*op)
-
-    def oneshot(self, op_id):
-        """On next LoopingCall interval, execute the associated func of control
-            operation with id op_id and send the result to control.
-
-            Returns: None
-            """
-        if self.ctrl_oplist[op_id].mask == 0:
-            self.ctrl_oplist[op_id].mask = 2
-        elif self.ctrl_oplist[op_id].mask == -1:
-            self.ctrl_oplist[op_id].mask = 3
-
-    def add_node_op(self, name, desc, func, args=None):
-        """Add one operation to be executed on node. func is the local
-            function to execute the operation. args must be a sequence of strings
-            and provides ext_args to generate corresponding widget.
-
-            Returns: the operation's id.
-            """
-        op_id = len(self.node_oplist)
-        op = Operation(op_id, name, desc, func, args, -1)
-        self.node_oplist.append(op)
-        return op_id
-
-    def add_node_ops(self, oplist):
-        """Add multiple operations to be executed on node. oplist is
-            a list of (name, desc, func, args) tuples.
-            Returns: None
-            """
-        for op in oplist:
-            self.add_node_op(*op)
-
-    def get_dev_link(self, node_link):
-        """Execute operations in ctrl_oplist to get args and wrap them in a
-            device link, then append it to node_link.
-
-            Returns: the created link_pb2.DeviceLink
+        Returns: the create OperationGroup.
         """
-        dev_link = node_link.device_links.add()
-        if self.dev_id is not None:
-            dev_link.device_id = self.dev_id
-        for op in self.ctrl_oplist:
-            if op.mask > 0:
-                link = dev_link.links.add()
-                link.id = op.id
-                args = op.func()
-                if args is not None:
-                    link.args.append(str(args))
-            if op.mask == 2: # oneshot
-                op.mask = 0
-            elif op.mask == 3:
-                op.mask = -1
-        return dev_link
+        grp = OperationGroup(name, desc)
+        grp_id = len(self.groups)
+        grp.id = grp_id
+        self.groups.append(grp)
+        return grp
 
-    def get_full_dev_link(self, node_link):
-        """Execute operations in ctrl_oplist to get args and wrap them in a
-            device link, then append it to node_link. This executes even mask=0
-            operations.
+    def add_group(self, group):
+        """Add an OperationGroup to this device and assign the group its id.
 
-            Returns: the created link_pb2.DeviceLink
+        Returns: assigned id
         """
-        dev_link = node_link.device_links.add()
-        if self.dev_id is not None:
-            dev_link.device_id = self.dev_id
-        for op in self.ctrl_oplist:
-            if op.mask >= 0:
-                link = dev_link.links.add()
-                link.id = op.id
-                args = op.func()
-                if args is not None:
-                    link.args.append(str(args))
-            if op.mask == 2: # oneshot
-                op.mask = 0
-            elif op.mask == 3:
-                op.mask = -1
+        grp_id = len(self.groups)
+        group.id = grp_id
+        self.groups.append(group)
+        return grp_id
+
+    def get_link(self, node_link):
+        """Get updates from groups, wrap them in a DeviceLink, then
+        append them to node_link.
+
+        Returns: the created link_pb2.DeviceLink
+        """
+        dev_link = node_link.dev_links.add()
+        dev_link.id = self.id
+        for grp in self.groups:
+            grp.get_link(dev_link)
         return dev_link
 
-    def exec_dev_link(self, dev_link):
-        """Parse link_pb2.DeviceLink dev_link, looks up corresponding methods
-            in node_oplist and executes them.
-            Returns: None
-            """
-        for link in dev_link.links:
-            op = self.node_oplist[link.id]
-            if len(link.args) > 0:
-                op.func(link.args)
-            else:
-                op.func()
+    def get_full_link(self, node_link):
+        """Get full updates from groups, wrap them in a DeviceLink, then
+        append them to node_link.
 
-    def generate_dev_desclink(self, node_link):
-        """Generate a description device link to describe operations about this
-            device, then append it to node_link.
-            Returns: the created link_pb2.DeviceLink
-            """
-        dev_link = node_link.device_links.add()
-        if self.dev_id is not None:
-            dev_link.device_id = self.dev_id
-        dev_link.device_name = self.name
-        dev_link.device_desc = self.desc
-        for op in self.ctrl_oplist:
-            link = dev_link.links.add()
-            link.target = link_pb2.Link.CONTROL
-            link.id = op.id
-            link.name = op.name
-            link.desc = op.desc
-            if op.args is not None:
-                for arg in op.args:
-                    link.args.append(str(arg))
-        for op in self.node_oplist:
-            link = dev_link.links.add()
-            link.target = link_pb2.Link.NODE
-            link.id = op.id
-            link.name = op.name
-            link.desc = op.desc
-            if op.args is not None:
-                for arg in op.args:
-                    link.args.append(str(arg))
+        Returns: the created link_pb2.DeviceLink
+        """
+        dev_link = node_link.dev_links.add()
+        dev_link.id = self.id
+        for grp in self.groups:
+            grp.get_full_link(dev_link)
         return dev_link
 
+    def get_desc_link(self, dev_link):
+        """Generate a description link to describe this Device, then
+        append it to node_link.
+
+        Returns: the created link_pb2.DeviceLink
+        """
+        dev_link = node_link.dev_links.add()
+        dev_link.id = self.id
+        dev_link.name = self.name
+        dev_link.desc = self.desc
+        for grp in self.groups:
+            grp.get_desc_link(dev_link)
+        return dev_link
+
+    def execute(self, dev_link):
+        """Handle links in dev_link to corresponding OperationGroups and executes them.
+
+        Returns: None
+        """
+        for grp_link in dev_link.grp_links:
+            grp = self.groups[grp_link.id]
+            grp.execute(grp_link)
 
 class Node:
-    """A node in smartlink is the terminal to control physical devices like
-        stepper motors. A Node object consists of one or multiple Device objects.
-        It is responsible for wrapping device links into a node link, parsing a
-        node link and handling contained device links over to corresponding devices.
-        """
-    def __init__(self, name, desc):
+    """A Node in smartlink corresponds to a network terminal, usually a computer,
+     to control physical devices. A Node consists of one or multiple Devices.
+    Node is the basic unit of network communication with control.
+    """
+    def __init__(self, name, desc=None):
         self.name = name
         self.desc = desc
-        self.device_list = []
+        self.devices = []
 
     def add_device(self, device):
         """Add device to node and assign the device its id.
-            Returns: None
-            """
-        dev_id = len(self.device_list)
+
+        Returns: the assigned id
+        """
+        dev_id = len(self.devices)
         device.dev_id = dev_id
-        self.device_list.append(device)
+        self.devices.append(device)
+        return dev_id
 
     def add_devices(self, device_list):
         """Add a list of devices to node and assign them their id.
@@ -290,46 +370,46 @@ class Node:
         for dev in device_list:
             self.add_device(dev)
 
-    def get_node_link(self):
-        """Get device links from devices and wrap them into a node link.
+    def get_link(self):
+        """Get updates from devices and wrap them in a NodeLink.
 
-            Returns: link_pb2.NodeLink
+        Returns: the created link_pb2.NodeLink
         """
         node_link = link_pb2.NodeLink()
-        for dev in self.device_list:
-            dev.get_dev_link(node_link)
+        for dev in self.devices:
+            dev.get_link(node_link)
         return node_link
 
-    def get_full_node_link(self):
-        """Get device links from devices and wrap them into a node link. This
-            generates a full link.
+    def get_full_link(self):
+        """Get full updates from devices and wrap them in a NodeLink.
 
-            Returns: link_pb2.NodeLink
+        Returns: the created link_pb2.NodeLink
         """
         node_link = link_pb2.NodeLink()
-        for dev in self.device_list:
-            dev.get_full_dev_link(node_link)
+        for dev in self.devices:
+            dev.get_full_link(node_link)
         return node_link
 
-    def exec_node_link(self, node_link):
-        """Parse link_pb2.NodeLink node_link and handle contained device links to
-            corresponding devices.
-            Returns: None
-            """
-        for dev_link in node_link.device_links:
-            dev = self.device_list[dev_link.device_id]
-            dev.exec_dev_link(dev_link)
+    def get_desc_link(self):
+        """Generate a description link to describe this Node.
 
-    def generate_node_desclink(self):
-        """Generate a description node link to describe devices about this node.
-            Returns: link_pb2.NodeLink
-            """
+        Returns: the created link_pb2.NodeLink
+        """
         node_link = link_pb2.NodeLink()
-        node_link.node_name = self.name
-        node_link.node_desc = self.desc
-        for dev in self.device_list:
-            dev.generate_dev_desclink(node_link)
+        node_link.name = self.name
+        node_link.desc = self.desc
+        for dev in self.devices:
+            dev.get_desc_link(node_link)
         return node_link
+
+    def execute(self, node_link):
+        """Handle links in node_link to corresponding Devices and executes them.
+
+        Returns: None
+        """
+        for dev_link in node_link.dev_links:
+            dev = self.devices[dev_link.id]
+            dev.execute(dev_link)
 
 
 def start(reactor, factory, port):

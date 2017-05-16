@@ -19,33 +19,33 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='link.proto',
   package='',
   syntax='proto3',
-  serialized_pb=_b('\n\nlink.proto\"{\n\x04Link\x12\x1c\n\x06target\x18\x01 \x01(\x0e\x32\x0c.Link.Target\x12\n\n\x02id\x18\x02 \x01(\r\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x04 \x01(\t\x12\x0c\n\x04\x61rgs\x18\x05 \x03(\t\"\x1f\n\x06Target\x12\x0b\n\x07\x43ONTROL\x10\x00\x12\x08\n\x04NODE\x10\x01\"_\n\nDeviceLink\x12\x11\n\tdevice_id\x18\x01 \x01(\r\x12\x13\n\x0b\x64\x65vice_name\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65vice_desc\x18\x03 \x01(\t\x12\x14\n\x05links\x18\x04 \x03(\x0b\x32\x05.Link\"S\n\x08NodeLink\x12\x11\n\tnode_name\x18\x01 \x01(\t\x12\x11\n\tnode_desc\x18\x02 \x01(\t\x12!\n\x0c\x64\x65vice_links\x18\x03 \x03(\x0b\x32\x0b.DeviceLinkb\x06proto3')
+  serialized_pb=_b('\n\nlink.proto\"v\n\x04Link\x12\x18\n\x04type\x18\x01 \x01(\x0e\x32\n.Link.Type\x12\n\n\x02id\x18\x02 \x01(\r\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0b\n\x03sig\x18\x04 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x05 \x01(\t\"\x1f\n\x04Type\x12\n\n\x06UPDATE\x10\x00\x12\x0b\n\x07\x43OMMAND\x10\x01\"I\n\tGroupLink\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x03 \x01(\t\x12\x14\n\x05links\x18\x04 \x03(\x0b\x32\x05.Link\"S\n\nDeviceLink\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x03 \x01(\t\x12\x1d\n\tgrp_links\x18\x04 \x03(\x0b\x32\n.GroupLink\"F\n\x08NodeLink\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x02 \x01(\t\x12\x1e\n\tdev_links\x18\x03 \x03(\x0b\x32\x0b.DeviceLinkb\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
-_LINK_TARGET = _descriptor.EnumDescriptor(
-  name='Target',
-  full_name='Link.Target',
+_LINK_TYPE = _descriptor.EnumDescriptor(
+  name='Type',
+  full_name='Link.Type',
   filename=None,
   file=DESCRIPTOR,
   values=[
     _descriptor.EnumValueDescriptor(
-      name='CONTROL', index=0, number=0,
+      name='UPDATE', index=0, number=0,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='NODE', index=1, number=1,
+      name='COMMAND', index=1, number=1,
       options=None,
       type=None),
   ],
   containing_type=None,
   options=None,
-  serialized_start=106,
-  serialized_end=137,
+  serialized_start=101,
+  serialized_end=132,
 )
-_sym_db.RegisterEnumDescriptor(_LINK_TARGET)
+_sym_db.RegisterEnumDescriptor(_LINK_TYPE)
 
 
 _LINK = _descriptor.Descriptor(
@@ -56,7 +56,7 @@ _LINK = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='target', full_name='Link.target', index=0,
+      name='type', full_name='Link.type', index=0,
       number=1, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -77,16 +77,16 @@ _LINK = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='desc', full_name='Link.desc', index=3,
+      name='sig', full_name='Link.sig', index=3,
       number=4, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='args', full_name='Link.args', index=4,
-      number=5, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='data', full_name='Link.data', index=4,
+      number=5, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -95,7 +95,7 @@ _LINK = _descriptor.Descriptor(
   ],
   nested_types=[],
   enum_types=[
-    _LINK_TARGET,
+    _LINK_TYPE,
   ],
   options=None,
   is_extendable=False,
@@ -104,40 +104,40 @@ _LINK = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=14,
-  serialized_end=137,
+  serialized_end=132,
 )
 
 
-_DEVICELINK = _descriptor.Descriptor(
-  name='DeviceLink',
-  full_name='DeviceLink',
+_GROUPLINK = _descriptor.Descriptor(
+  name='GroupLink',
+  full_name='GroupLink',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='device_id', full_name='DeviceLink.device_id', index=0,
+      name='id', full_name='GroupLink.id', index=0,
       number=1, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='device_name', full_name='DeviceLink.device_name', index=1,
+      name='name', full_name='GroupLink.name', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='device_desc', full_name='DeviceLink.device_desc', index=2,
+      name='desc', full_name='GroupLink.desc', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='links', full_name='DeviceLink.links', index=3,
+      name='links', full_name='GroupLink.links', index=3,
       number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
@@ -155,8 +155,60 @@ _DEVICELINK = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=139,
-  serialized_end=234,
+  serialized_start=134,
+  serialized_end=207,
+)
+
+
+_DEVICELINK = _descriptor.Descriptor(
+  name='DeviceLink',
+  full_name='DeviceLink',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='id', full_name='DeviceLink.id', index=0,
+      number=1, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='name', full_name='DeviceLink.name', index=1,
+      number=2, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='desc', full_name='DeviceLink.desc', index=2,
+      number=3, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='grp_links', full_name='DeviceLink.grp_links', index=3,
+      number=4, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=209,
+  serialized_end=292,
 )
 
 
@@ -168,21 +220,21 @@ _NODELINK = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='node_name', full_name='NodeLink.node_name', index=0,
+      name='name', full_name='NodeLink.name', index=0,
       number=1, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='node_desc', full_name='NodeLink.node_desc', index=1,
+      name='desc', full_name='NodeLink.desc', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='device_links', full_name='NodeLink.device_links', index=2,
+      name='dev_links', full_name='NodeLink.dev_links', index=2,
       number=3, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
@@ -200,15 +252,17 @@ _NODELINK = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=236,
-  serialized_end=319,
+  serialized_start=294,
+  serialized_end=364,
 )
 
-_LINK.fields_by_name['target'].enum_type = _LINK_TARGET
-_LINK_TARGET.containing_type = _LINK
-_DEVICELINK.fields_by_name['links'].message_type = _LINK
-_NODELINK.fields_by_name['device_links'].message_type = _DEVICELINK
+_LINK.fields_by_name['type'].enum_type = _LINK_TYPE
+_LINK_TYPE.containing_type = _LINK
+_GROUPLINK.fields_by_name['links'].message_type = _LINK
+_DEVICELINK.fields_by_name['grp_links'].message_type = _GROUPLINK
+_NODELINK.fields_by_name['dev_links'].message_type = _DEVICELINK
 DESCRIPTOR.message_types_by_name['Link'] = _LINK
+DESCRIPTOR.message_types_by_name['GroupLink'] = _GROUPLINK
 DESCRIPTOR.message_types_by_name['DeviceLink'] = _DEVICELINK
 DESCRIPTOR.message_types_by_name['NodeLink'] = _NODELINK
 
@@ -218,6 +272,13 @@ Link = _reflection.GeneratedProtocolMessageType('Link', (_message.Message,), dic
   # @@protoc_insertion_point(class_scope:Link)
   ))
 _sym_db.RegisterMessage(Link)
+
+GroupLink = _reflection.GeneratedProtocolMessageType('GroupLink', (_message.Message,), dict(
+  DESCRIPTOR = _GROUPLINK,
+  __module__ = 'link_pb2'
+  # @@protoc_insertion_point(class_scope:GroupLink)
+  ))
+_sym_db.RegisterMessage(GroupLink)
 
 DeviceLink = _reflection.GeneratedProtocolMessageType('DeviceLink', (_message.Message,), dict(
   DESCRIPTOR = _DEVICELINK,

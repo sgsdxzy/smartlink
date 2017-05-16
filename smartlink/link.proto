@@ -1,26 +1,33 @@
 syntax = "proto3";
 
 message Link {
-    enum Target {   // The receiving end of link, where operation is executed
-        CONTROL = 0;
-        NODE = 1;
+    enum Type {
+        UPDATE = 0;
+        COMMAND = 1;
     }
-    Target target = 1;
+    Type type = 1;
     uint32 id = 2;
     string name = 3;
-    string desc = 4;    // Describe the signature of operation
-    repeated string args = 5;
+    string sig = 4;    // Describe the signature of operation
+    string data = 5;
 }
 
-message DeviceLink {
-    uint32 device_id = 1;
-    string device_name = 2;
-    string device_desc = 3;
+message GroupLink {
+    uint32 id = 1;
+    string name = 2;
+    string desc = 3;
     repeated Link links = 4;
 }
 
+message DeviceLink {
+    uint32 id = 1;
+    string name = 2;
+    string desc = 3;
+    repeated GroupLink grp_links = 4;
+}
+
 message NodeLink {
-    string node_name = 1;
-    string node_desc = 2;
-    repeated DeviceLink device_links = 3;
+    string name = 1;
+    string desc = 2;
+    repeated DeviceLink dev_links = 3;
 }
