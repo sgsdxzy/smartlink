@@ -15,19 +15,19 @@ message Link {
 message GroupLink {
     uint32 id = 1;
     string name = 2;
-    string desc = 3;
+    string msg = 3;
     repeated Link links = 4;
 }
 
 message DeviceLink {
     uint32 id = 1;
     string name = 2;
-    string desc = 3;
+    string msg = 3;
     repeated GroupLink grp_links = 4;
 }
 
 message NodeLink {
     string name = 1;
-    string desc = 2;
-    repeated DeviceLink dev_links = 3;
+    string msg = 2;
+    repeated DeviceLink dev_links = 4;
 }

@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='link.proto',
   package='',
   syntax='proto3',
-  serialized_pb=_b('\n\nlink.proto\"v\n\x04Link\x12\x18\n\x04type\x18\x01 \x01(\x0e\x32\n.Link.Type\x12\n\n\x02id\x18\x02 \x01(\r\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0b\n\x03sig\x18\x04 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x05 \x01(\t\"\x1f\n\x04Type\x12\n\n\x06UPDATE\x10\x00\x12\x0b\n\x07\x43OMMAND\x10\x01\"I\n\tGroupLink\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x03 \x01(\t\x12\x14\n\x05links\x18\x04 \x03(\x0b\x32\x05.Link\"S\n\nDeviceLink\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x03 \x01(\t\x12\x1d\n\tgrp_links\x18\x04 \x03(\x0b\x32\n.GroupLink\"F\n\x08NodeLink\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x02 \x01(\t\x12\x1e\n\tdev_links\x18\x03 \x03(\x0b\x32\x0b.DeviceLinkb\x06proto3')
+  serialized_pb=_b('\n\nlink.proto\"v\n\x04Link\x12\x18\n\x04type\x18\x01 \x01(\x0e\x32\n.Link.Type\x12\n\n\x02id\x18\x02 \x01(\r\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0b\n\x03sig\x18\x04 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x05 \x01(\t\"\x1f\n\x04Type\x12\n\n\x06UPDATE\x10\x00\x12\x0b\n\x07\x43OMMAND\x10\x01\"H\n\tGroupLink\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03msg\x18\x03 \x01(\t\x12\x14\n\x05links\x18\x04 \x03(\x0b\x32\x05.Link\"R\n\nDeviceLink\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03msg\x18\x03 \x01(\t\x12\x1d\n\tgrp_links\x18\x04 \x03(\x0b\x32\n.GroupLink\"E\n\x08NodeLink\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0b\n\x03msg\x18\x02 \x01(\t\x12\x1e\n\tdev_links\x18\x04 \x03(\x0b\x32\x0b.DeviceLinkb\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -130,7 +130,7 @@ _GROUPLINK = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='desc', full_name='GroupLink.desc', index=2,
+      name='msg', full_name='GroupLink.msg', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -156,7 +156,7 @@ _GROUPLINK = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=134,
-  serialized_end=207,
+  serialized_end=206,
 )
 
 
@@ -182,7 +182,7 @@ _DEVICELINK = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='desc', full_name='DeviceLink.desc', index=2,
+      name='msg', full_name='DeviceLink.msg', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -207,8 +207,8 @@ _DEVICELINK = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=209,
-  serialized_end=292,
+  serialized_start=208,
+  serialized_end=290,
 )
 
 
@@ -227,7 +227,7 @@ _NODELINK = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='desc', full_name='NodeLink.desc', index=1,
+      name='msg', full_name='NodeLink.msg', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -235,7 +235,7 @@ _NODELINK = _descriptor.Descriptor(
       options=None),
     _descriptor.FieldDescriptor(
       name='dev_links', full_name='NodeLink.dev_links', index=2,
-      number=3, type=11, cpp_type=10, label=3,
+      number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -252,8 +252,8 @@ _NODELINK = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=294,
-  serialized_end=364,
+  serialized_start=292,
+  serialized_end=361,
 )
 
 _LINK.fields_by_name['type'].enum_type = _LINK_TYPE

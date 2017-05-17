@@ -7,7 +7,7 @@ from smartlink import link_pb2
 
 logger = Logger()
 
-class SmartlinkControl(protocol.Protocol):
+class NodeProtocal(protocol.Protocol):
     """Twisted protocal class for smartlink node server to handle connections
         from controls."""
     def __init__(self):
@@ -50,17 +50,17 @@ class SmartlinkControl(protocol.Protocol):
                 format(prefix=self.logPrefix(), peer=self.transport.getPeer()))
             raise
 
-class SmartlinkFactory(protocol.Factory):
+class NodeFactory(protocol.Factory):
     """Twisted factory class for smartlink node server."""
-    protocol = SmartlinkControl
-    def __init__(self, node, frequency=1):
+    protocol = NodeProtocal
+    def __init__(self, node, interval=1):
         self.broadcast = []
         self.node = node
         self.desc_link = node.get_desc_link()
         #print(self.desc_link)
         self.str_desc = self.desc_link.SerializeToString()
         self.loopcall = task.LoopingCall(self.announce)
-        self.loopcall.start(1/frequency)
+        self.loopcall.start(interval)
 
     def announce(self):
         """Broadcast node link to all connected and ready controls.
@@ -216,14 +216,17 @@ class OperationGroup:
         """Get updates from the list of Updates, wrap them in a GroupLink, then
         append them to dev_link.
 
-        Returns: the created link_pb2.GroupLink
+        Returns: the created link_pb2.GroupLink or None if GroupLink is empty
         """
         grp_link = dev_link.grp_links.add()
+        grp_link.id = self.id
         for update in self.updates:
             update.get_link(grp_link)
-        if len(grp_link.links) > 0:
-            grp_link.id = self.id
-        return grp_link
+        if not grp_link.links:    #empty
+            del dev_link.grp_links[-1]
+            return None
+        else:
+            return grp_link
 
     def get_full_link(self, dev_link):
         """Get full updates from the list of Updates, wrap them in a GroupLink,
@@ -234,7 +237,7 @@ class OperationGroup:
         grp_link = dev_link.grp_links.add()
         grp_link.id = self.id
         for update in self.updates:
-            update.get_link(grp_link)
+            update.get_full_link(grp_link)
         return grp_link
 
     def get_desc_link(self, dev_link):
@@ -246,7 +249,7 @@ class OperationGroup:
         grp_link = dev_link.grp_links.add()
         grp_link.id = self.id
         grp_link.name = self.name
-        grp_link.desc = self.desc
+        grp_link.msg = self.desc
         for update in self.updates:
             update.get_desc_link(grp_link)
         for cmd in self.commands:
@@ -299,12 +302,15 @@ class Device:
         """Get updates from groups, wrap them in a DeviceLink, then
         append them to node_link.
 
-        Returns: the created link_pb2.DeviceLink
+        Returns: the created link_pb2.DeviceLink or None if DeviceLink is empty
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
         for grp in self.groups:
             grp.get_link(dev_link)
+        if not dev_link.grp_links:    #empty
+            del node_link.dev_links[-1]
+            return None
         return dev_link
 
     def get_full_link(self, node_link):
@@ -328,7 +334,7 @@ class Device:
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
         dev_link.name = self.name
-        dev_link.desc = self.desc
+        dev_link.msg = self.desc
         for grp in self.groups:
             grp.get_desc_link(dev_link)
         return dev_link
@@ -351,6 +357,17 @@ class Node:
         self.name = name
         self.desc = desc
         self.devices = []
+
+    def create_device(self, name, desc=None):
+        """Create a new Device with name and desc.
+
+        Returns: the created Device.
+        """
+        dev = Device(name, desc)
+        dev_id = len(self.devices)
+        dev.id = dev_id
+        self.devices.append(grp)
+        return dev
 
     def add_device(self, device):
         """Add device to node and assign the device its id.
@@ -397,7 +414,7 @@ class Node:
         """
         node_link = link_pb2.NodeLink()
         node_link.name = self.name
-        node_link.desc = self.desc
+        node_link.msg = self.desc
         for dev in self.devices:
             dev.get_desc_link(node_link)
         return node_link
