@@ -53,11 +53,10 @@ class NodeProtocal(protocol.Protocol):
 class NodeFactory(protocol.Factory):
     """Twisted factory class for smartlink node server."""
     protocol = NodeProtocal
-    def __init__(self, node, interval=1):
+    def __init__(self, node, interval=0.5):
         self.broadcast = []
         self.node = node
         self.desc_link = node.get_desc_link()
-        #print(self.desc_link)
         self.str_desc = self.desc_link.SerializeToString()
         self.loopcall = task.LoopingCall(self.announce)
         self.loopcall.start(interval)
@@ -68,7 +67,6 @@ class NodeFactory(protocol.Factory):
             """
         node_link = self.node.get_link()
         str_link = node_link.SerializeToString()
-        #print(len(str_link))
         #print(node_link)
         for client in self.broadcast:
             client.transport.write(str_link)
@@ -126,7 +124,7 @@ class Update:
         self.ext_args = ext_args
         self.old = None
 
-    def get_link(grp_link):
+    def get_link(self, grp_link):
         """Execute the associated func and if the result is different from prev,
         wrap the result in a link_pb2.Link and append it to grp_link.
 
@@ -148,7 +146,7 @@ class Update:
             link.data = new
             return link
 
-    def get_full_link(grp_link):
+    def get_full_link(self, grp_link):
         """Execute the associated func, wrap the result in a link_pb2.Link and
         append it to grp_link.
 
@@ -166,7 +164,7 @@ class Update:
         link.data = new
         return link
 
-    def get_desc_link(grp_link):
+    def get_desc_link(self, grp_link):
         """Generate a description link to describe this Update, then append it to grp_link.
 
         Returns: the created link_pb2.Link
@@ -202,6 +200,17 @@ class OperationGroup:
         self.commands.append(command)
         return cmd_id
 
+    def create_command(self, name, sig, func, ext_args=None):
+        """Create a new Command for this group.
+
+        Returns: the created Update.
+        """
+        cmd = Command(name, sig, func, ext_args)
+        cmd_id = len(self.commands)
+        cmd.id = cmd_id
+        self.commands.append(cmd)
+        return cmd
+
     def add_update(self, update):
         """Add an Update to this group and assign the Update its id.
 
@@ -211,6 +220,17 @@ class OperationGroup:
         update.id = update_id
         self.updates.append(update)
         return update_id
+
+    def create_update(self, name, sig, func, ext_args=None):
+        """Create a new Update for this group.
+
+        Returns: the created Update.
+        """
+        update = Update(name, sig, func, ext_args)
+        update_id = len(self.updates)
+        update.id = update_id
+        self.updates.append(update)
+        return update
 
     def get_link(self, dev_link):
         """Get updates from the list of Updates, wrap them in a GroupLink, then
@@ -249,7 +269,8 @@ class OperationGroup:
         grp_link = dev_link.grp_links.add()
         grp_link.id = self.id
         grp_link.name = self.name
-        grp_link.msg = self.desc
+        if self.desc:
+            grp_link.msg = self.desc
         for update in self.updates:
             update.get_desc_link(grp_link)
         for cmd in self.commands:
@@ -325,7 +346,7 @@ class Device:
             grp.get_full_link(dev_link)
         return dev_link
 
-    def get_desc_link(self, dev_link):
+    def get_desc_link(self, node_link):
         """Generate a description link to describe this Device, then
         append it to node_link.
 
@@ -334,7 +355,8 @@ class Device:
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
         dev_link.name = self.name
-        dev_link.msg = self.desc
+        if self.desc:
+            dev_link.msg = self.desc
         for grp in self.groups:
             grp.get_desc_link(dev_link)
         return dev_link
@@ -366,7 +388,7 @@ class Node:
         dev = Device(name, desc)
         dev_id = len(self.devices)
         dev.id = dev_id
-        self.devices.append(grp)
+        self.devices.append(dev)
         return dev
 
     def add_device(self, device):
@@ -414,7 +436,8 @@ class Node:
         """
         node_link = link_pb2.NodeLink()
         node_link.name = self.name
-        node_link.msg = self.desc
+        if self.desc:
+            node_link.msg = self.desc
         for dev in self.devices:
             dev.get_desc_link(node_link)
         return node_link
