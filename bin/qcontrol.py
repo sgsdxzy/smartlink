@@ -1,11 +1,15 @@
 import sys
+import asyncio
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtNetwork import *
 
+from quamash import QEventLoop
 from smartlink import link_pb2
 from smartlink.qtpanel import NodePanel
+
 
 class ControlPanel(QWidget):
     def __init__(self):
@@ -35,10 +39,15 @@ class ControlPanel(QWidget):
 
 def main():
     app = QApplication(sys.argv)
-    app.setStyle(QStyleFactory.create("windows"))
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    app.setStyle(QStyleFactory.create("fusion"))
     panel = ControlPanel()
     panel.show()
-    sys.exit(app.exec_())
+    
+    with loop:
+        loop.run_forever()
+
 
 if __name__ == '__main__':
     main()

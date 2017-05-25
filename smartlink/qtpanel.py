@@ -1,10 +1,18 @@
+import asyncio
+from asyncio import ensure_future
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtNetwork import *
 
-from smartlink import link_pb2
+from google.protobuf.message import DecodeError
+
+from quamash import QEventLoop
+from smartlink import EndOfStreamError, ProtocalError, StreamReadWriter
+from smartlink import link_pb2, varint
 from smartlink.widgets import *
+
 
 class CommandWidget(QFrame):
     """A widget to handle user commands."""
@@ -12,6 +20,8 @@ class CommandWidget(QFrame):
         "str": CStrWidget,
         "float": CFloatWidget,
     }
+    StyleNormal = "CommandWidget { border: 1px solid #CCCCCC; }"
+    StyleError = "CommandWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, grp, desc_link):
         super().__init__()
@@ -20,8 +30,8 @@ class CommandWidget(QFrame):
         self.widget_list = []
         self.full_widget_list = []
 
-        self.setFrameStyle(QFrame.StyledPanel|QFrame.Plain)
-        self.setLineWidth(0.5)
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
+        self.setStyleSheet(self.StyleNormal)
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
         self.generate_UI()
@@ -66,7 +76,7 @@ class CommandWidget(QFrame):
             button.clicked.connect(self.send_command)
             self.full_widget_list.append(button)
 
-        else: # signature is empty, generate a single button with name
+        else:  # signature is empty, generate a single button with name
             button = QPushButton(self.desc_link.name)
             button.clicked.connect(self.send_command)
             self.full_widget_list.append(button)
@@ -94,7 +104,6 @@ class CommandWidget(QFrame):
 
         Returns: None
         """
-        #TODO
         node_link = link_pb2.NodeLink()
         dev_link = node_link.dev_links.add()
         dev_link.id = self.grp.dev.desc_link.id
@@ -103,13 +112,16 @@ class CommandWidget(QFrame):
         if self.get_link(grp_link):
             self.grp.dev.node.send_command(node_link)
 
+
 class UpdateWidget(QFrame):
     """A widget to handle updates from node."""
     widget_dict = {
         "str": UStrWidget,
         "float": UFloatWidget,
         "bool": UBoolWidget,
-        }
+    }
+    StyleNormal = "UpdateWidget { border: 1px solid #CCCCCC; }"
+    StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, grp, desc_link):
         super().__init__()
@@ -118,8 +130,9 @@ class UpdateWidget(QFrame):
         self.widget_list = []
         self.full_widget_list = []
 
-        self.setFrameStyle(QFrame.StyledPanel|QFrame.Plain)
-        self.setLineWidth(0.5)
+        # self.setObjectName("U");
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
+        self.setStyleSheet(self.StyleNormal)
         self.layout = QHBoxLayout()
         self.setLayout(self.layout)
         self.generate_UI()
@@ -172,15 +185,19 @@ class UpdateWidget(QFrame):
             arg_list = link.data.split(';')
             for i in range(len(arg_list)):
                 self.widget_list[i].update(arg_list[i])
+            self.setStyleSheet(self.StyleNormal)
         except:
-            #TODO
-            pass
-            #self.grp.err("Failed to update {0}.".format(self.desc_link.name))
+            self.setStyleSheet(self.StyleError)
+            self.grp.dev.display_error("Failed to display some update(s)")
+
 
 class GroupPanel(QFrame):
     """A subpanel to display a group of operations. maxlen is the maximum number
     of basic QWidgets other on a single line.
     """
+    StyleNormal = "GroupPanel { border: 1px solid #808080; }"
+    StyleError = "GroupPanel { border: 1px solid #FF0000; }"
+
     def __init__(self, dev, desc_link, maxlen=20):
         super().__init__()
         self.dev = dev
@@ -189,8 +206,8 @@ class GroupPanel(QFrame):
         self.commands = []
         self.updates = []
 
-        self.setFrameStyle(QFrame.StyledPanel|QFrame.Plain)
-        self.setLineWidth(1)
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
+        self.setStyleSheet(self.StyleNormal)
         self.outer_layout = QHBoxLayout()
         self.setLayout(self.outer_layout)
         self.layout = QVBoxLayout()
@@ -206,8 +223,9 @@ class GroupPanel(QFrame):
         """
         if self.desc_link.name != "":
             self.label = QLabel(self.desc_link.name)
-            self.label.setFrameStyle(QFrame.StyledPanel|QFrame.Plain)
-            self.label.setLineWidth(0.5)
+            self.label.setFont(self.dev.node.grp_title_font)
+            # self.label.setFrameStyle(QFrame.StyledPanel|QFrame.Plain)
+            # self.label.setLineWidth(0.5)
             self.outer_layout.insertWidget(0, self.label)
 
         col_index = 0
@@ -215,7 +233,7 @@ class GroupPanel(QFrame):
             if link.type == link_pb2.Link.COMMAND:
                 widget = CommandWidget(self, link)
                 self.commands.append(widget)
-            else: # link.type == link_pb2.Link.UPDATE:
+            else:  # link.type == link_pb2.Link.UPDATE:
                 widget = UpdateWidget(self, link)
                 self.updates.append(widget)
 
@@ -242,19 +260,20 @@ class DevicePanel(QWidget):
     """A subpanel to display device status and commands. It is
     generated automatically according to the description link desc_link.
     """
+
     def __init__(self, node, desc_link):
         super().__init__()
         self.node = node
         self.desc_link = desc_link
         self.groups = []
 
-        #Draw a frame
+        # Draw a frame
         self.outer_layout = QGridLayout()
         self.setLayout(self.outer_layout)
         self.outer_layout.addWidget(QVLine(), 0, 0, 3, 1)
         self.outer_layout.addWidget(QVLine(), 0, 3, 3, 1)
-        self.outer_layout.addWidget(QHLine(), 0, 2, 1, 1)
-        self.outer_layout.addWidget(QHLine(), 2, 1, 1, 2)
+        self.outer_layout.addWidget(QHLine(), 0, 2, 1, 2)
+        self.outer_layout.addWidget(QHLine(), 2, 0, 1, 4)
         self.headline = QHBoxLayout()
         self.outer_layout.addLayout(self.headline, 0, 1)
         self.layout = QVBoxLayout()
@@ -266,8 +285,10 @@ class DevicePanel(QWidget):
 
         Returns: None
         """
-        self.headline.addWidget(QLabel(self.desc_link.name))
-        #TODO: apply all button
+        self.title = QLabel(self.desc_link.name)
+        self.title.setFont(self.node.dev_title_font)
+        self.headline.addWidget(self.title)
+        # TODO: apply all button
         for grp_link in self.desc_link.grp_links:
             grp = GroupPanel(self, grp_link)
             self.groups.append(grp)
@@ -289,6 +310,10 @@ class DevicePanel(QWidget):
         """
         pass
 
+    def display_error(self, msg):
+        # TODO
+        pass
+
 
 class NodePanel(QFrame):
     """A panel to display node status and send controls to node. It is
@@ -302,15 +327,15 @@ class NodePanel(QFrame):
 
     def __init__(self):
         super().__init__()
-        self.ready = False
-        self.host_ip = None
-        self.socket = QTcpSocket()
-        self.desc_link = None
-        self.devices = []
-        self.initUI()
+        self._connected = False
+        self._host_ip = None
+        self._readwriter = None
+        self._desc_link = None
+        self._devices = []
+        self._initUI()
 
-    def initUI(self):
-        self.setFrameStyle(QFrame.Panel|QFrame.Raised)
+    def _initUI(self):
+        self.setFrameStyle(QFrame.Panel | QFrame.Raised)
         self.setLineWidth(2)
 
         self.outer_layout = QGridLayout()
@@ -328,13 +353,13 @@ class NodePanel(QFrame):
         self.outer_layout.addWidget(self.status_light, 0, 1)
         self.title_font = QFont()
         self.title_font.setWeight(QFont.Black)
-        self.title_font.setPointSize(16)
+        self.title_font.setPointSize(18)
         self.dev_title_font = QFont()
         self.dev_title_font.setWeight(QFont.Bold)
-        self.dev_title_font.setPointSize(12)
-        self.default_font = QFont()
-        self.default_font.setWeight(QFont.Normal)
-        self.default_font.setPointSize(10)
+        self.dev_title_font.setPointSize(16)
+        self.grp_title_font = QFont()
+        self.grp_title_font.setWeight(QFont.Bold)
+        self.grp_title_font.setPointSize(12)
 
         self.title = QLabel("Not connected")
         self.title.setFont(self.title_font)
@@ -354,144 +379,141 @@ class NodePanel(QFrame):
         self.layout = QVBoxLayout()
         self.outer_layout.addLayout(self.layout, 1, 1, 4, 3)
 
-        self.connect_btn.clicked.connect(self.connect)
-        self.disconnect_btn.clicked.connect(self.disconnect)
-        self.reconnect_btn.clicked.connect(self.reconnect)
+        self.connect_btn.clicked.connect(self.connect_btn_exec)
+        self.disconnect_btn.clicked.connect(self.disconnect_btn_exec)
+        self.reconnect_btn.clicked.connect(self.reconnect_btn_exec)
         self.close_btn.clicked.connect(self.close)
 
-    def reset_socket_slots(self):
-        """Disconnect all slots of self.socket
+
+    def _clear_devices(self):
+        """Remove all device panels from node panel.
 
         Returns: None
         """
-        self.socket.readyRead.disconnect()
-        self.socket.error.disconnect()
-
-    def clear_devices(self):
-        """Remove all devices from node.
-
-        Returns: None
-        """
-        self.devices.clear()
+        self._devices.clear()
         while self.layout.count():
             child = self.layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-    def generate_panel(self):
+    def _generate_panel(self):
         """Populate the panel by the description node link.
 
         Returns: None
         """
-        self.title.setText(self.desc_link.name)
-        for dev_link in self.desc_link.dev_links:
+        self.title.setText(self._desc_link.name)
+        for dev_link in self._desc_link.dev_links:
             dev = DevicePanel(self, dev_link)
-            self.devices.append(dev)
+            self._devices.append(dev)
             self.layout.addWidget(dev)
 
     def send_command(self, node_link):
-        str_link = node_link.SerializeToString()
-        self.socket.write(str_link)
+        if self._connected:
+            bin_link = node_link.SerializeToString()
+            self._readwriter.write_bin_link(bin_link)
 
     @pyqtSlot()
-    def connect(self):
-        if self.socket.state() == QAbstractSocket.UnconnectedState: # Not already connected
-            self.clear_devices()
-            self.host_ip = self.host_edit.text()
+    def connect_btn_exec(self):
+        if not self._connected:
+            self._clear_devices()
+            self._host_ip = self.host_edit.text()
             self.status_bar.showMessage("Connecting")
             self.status_light.setStyleSheet(self.StyleWorking)
-            self.socket.error.connect(self.connection_error)
-            self.socket.readyRead.connect(self.connection_made)
-            self.socket.connectToHost(self.host_ip, 5362)
+            ensure_future(self._connect())
 
-    @pyqtSlot()
-    def disconnect(self):
-        if self.socket.state() != QAbstractSocket.UnconnectedState:
-            self.reset_socket_slots()
-            self.ready = False
-            self.status_bar.showMessage("Disconnecting")
-            self.status_light.setStyleSheet(self.StyleWorking)
-            self.socket.disconnected.connect(self.connection_closed)
-            self.socket.close()
-
-    @pyqtSlot()
-    def reconnect(self):
-        if self.socket.state() == QAbstractSocket.ConnectedState:
-            self.clear_devices()
-            self.reset_socket_slots()
-            self.ready = False
-            self.status_bar.showMessage("Disconnecting")
-            self.status_light.setStyleSheet(self.StyleWorking)
-            self.socket.disconnected.connect(self.connection_restart)
-            self.socket.disconnectFromHost()
-
-    @pyqtSlot()
-    def connection_made(self):
-        """Executed after connection to host is made"""
-        self.status_bar.showMessage("Connected")
+    async def _connect(self):
+        """Coroutine to make connection to node server."""
         try:
-            node_link = link_pb2.NodeLink.FromString(self.socket.read(self.socket.bytesAvailable()))
-        except:
-            # Didn't receive a valid node description link
-            return
-        self.desc_link = node_link
-        self.generate_panel()
+            reader, writer = await asyncio.open_connection(host=self._host_ip, port=5362)
+            self._readwriter = StreamReadWriter(reader, writer)
 
-        self.socket.readyRead.disconnect(self.connection_made)
-        self.socket.readyRead.connect(self.update)
-        self.status_light.setStyleSheet(self.StyleReady)
-        self.ready = True
-        self.status_bar.showMessage("Ready")
-        self.socket.write("RDY".encode("utf-8"))
+            #Parse description link from nodeserver
+            length = await varint.decode(self._readwriter)
+            buf = await self._readwriter.read(length)
+            while len(buf) < length:
+                buf += await self.read(length-len(buf))
+            node_link = link_pb2.NodeLink.FromString(buf)
+            self._desc_link = node_link
+
+            self._generate_panel()
+            self.status_light.setStyleSheet(self.StyleReady)
+            self._connected = True
+            self.status_bar.showMessage("Ready")
+            self._readwriter.write("RDY".encode("ascii"))
+            ensure_future(self._handle_update())
+        except Exception as e:
+            self._connected = False
+            self.status_bar.showMessage(str(e))
+            self.status_light.setStyleSheet(self.StyleError)
+
+    async def _handle_update(self):
+        try:
+            while True:
+                #Parse NodeLink
+                length = await varint.decode(self._readwriter)
+                buf = await self._readwriter.read(length)
+                while len(buf) < length:
+                    buf += await self.read(length-len(buf))
+                update_link = link_pb2.NodeLink.FromString(buf)
+
+                for dev_link in update_link.dev_links:
+                    dev = self._devices[dev_link.id]
+                    dev.update(dev_link)
+                # A flashing light effect
+                self.status_light.setStyleSheet(self.StyleWorking)
+                QTimer.singleShot(100, self.light_flash)
+        except EndOfStreamError:
+            #server disconnects
+            pass
+        except (DecodeError, ProtocalError):
+            #purposely drop connection
+            self._readwriter.close()
+        finally:
+            self.status_bar.showMessage("Disconnected")
+            self.status_light.setStyleSheet(self.StyleError)
+
+    @pyqtSlot()
+    def disconnect_btn_exec(self):
+        if self._connected:
+            self._readwriter.close()
+            self._connected = False
+            self.status_bar.showMessage("Disconnected")
+            self.status_light.setStyleSheet(self.StyleDisabled)
+
+    @pyqtSlot()
+    def reconnect_btn_exec(self):
+        if self._connected:
+            self._readwriter.close()
+            self._connected = False
+            self.status_bar.showMessage("Disconnected")
+            self.status_light.setStyleSheet(self.StyleDisabled)
+            self.connect_btn_exec()
 
     @pyqtSlot()
     def light_flash(self):
-        if self.ready:
+        if self._connected:
             self.status_light.setStyleSheet(self.StyleReady)
-
-    @pyqtSlot()
-    def connection_closed(self):
-        """Executed after connection is purposely closed."""
-        self.status_bar.showMessage("Disconnected")
-        self.socket.disconnected.disconnect()
-        self.status_light.setStyleSheet(self.StyleDisabled)
-
-    @pyqtSlot()
-    def connection_restart(self):
-        """Executed when disconnected from host after reconnect() is issued."""
-        self.socket.disconnected.disconnect()
-        self.status_bar.showMessage("Reconnecting")
-        self.status_light.setStyleSheet(self.StyleWorking)
-        self.socket.error.connect(self.connection_error)
-        self.socket.readyRead.connect(self.connection_made)
-        self.socket.connectToHost(self.host_ip, 5362)
 
     @pyqtSlot()
     def update(self):
         try:
-            node_link = link_pb2.NodeLink.FromString(self.socket.read(self.socket.bytesAvailable()))
+            node_link = link_pb2.NodeLink.FromString(
+                self.socket.read(self.socket.bytesAvailable()))
         except:
             # Didn't receive a valid node link
             self.status_light.setStyleSheet(self.StyleError)
             return
         # A flashing light effect
         self.status_light.setStyleSheet(self.StyleWorking)
-        #print(node_link)
         for dev_link in node_link.dev_links:
-            dev = self.devices[dev_link.id]
+            dev = self._devices[dev_link.id]
             dev.update(dev_link)
         QTimer.singleShot(100, self.light_flash)
 
-    @pyqtSlot(QAbstractSocket.SocketError)
-    def connection_error(self, error):
-        self.reset_socket_slots()
-        self.ready = False
-        self.status_bar.showMessage(self.socket.errorString())
-        self.status_light.setStyleSheet(self.StyleError)
-
     @pyqtSlot()
     def close(self):
-        if self.socket.state() != QAbstractSocket.UnconnectedState:
-            self.status_bar.showMessage("Please disconnect before closing panel")
+        if self._connected:
+            self.status_bar.showMessage(
+                "Please disconnect before closing panel")
         else:
             self.deleteLater()

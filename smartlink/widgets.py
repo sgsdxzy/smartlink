@@ -4,25 +4,31 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtNetwork import *
 
+
 class QHLine(QFrame):
     def __init__(self):
         super().__init__()
         self.setFrameShape(QFrame.HLine)
+        self.setLineWidth(2)
         self.setFrameShadow(QFrame.Sunken)
+
 
 class QVLine(QFrame):
     def __init__(self):
         super().__init__()
         self.setFrameShape(QFrame.VLine)
+        self.setLineWidth(2)
         self.setFrameShadow(QFrame.Sunken)
+
 
 class StrWidget(QLineEdit):
     """Widget for handling "str" type signature."""
+
     def __init__(self, ext_args=None):
         super().__init__()
         self.setMinimumWidth(40)
         if ext_args is not None:
-            self.setText(ext_args)
+            self.setText(str(ext_args))
 
     def update(self, arg):
         self.setText(arg)
@@ -33,6 +39,7 @@ class StrWidget(QLineEdit):
 
 class UStrWidget(StrWidget):
     """Widget for handling "str" type signature of update."""
+
     def __init__(self, ext_args=None):
         super().__init__(ext_args)
         self.setReadOnly(True)
@@ -40,12 +47,14 @@ class UStrWidget(StrWidget):
 
 class CStrWidget(StrWidget):
     """Widget for handling "str" type signature of command."""
+
     def __init__(self, ext_args=None):
         super().__init__(ext_args)
 
 
 class UFloatWidget(UStrWidget):
     """Widget for handling "float" type signature of update."""
+
     def __init__(self, ext_args=None):
         super().__init__(ext_args)
         self.validator = QDoubleValidator()
@@ -54,6 +63,7 @@ class UFloatWidget(UStrWidget):
 
 class CFloatWidget(CStrWidget):
     """Widget for handling "float" type argument of command."""
+
     def __init__(self, ext_args=None):
         super().__init__(ext_args)
         self.validator = QDoubleValidator()
@@ -67,9 +77,9 @@ class UBoolWidget(QPushButton):
     StyleUnknown = "QPushButton { color: #FFFFFF; background-color : #808080}"
     True_input = ("1", "T", "True", "Y", "t", "true")
     False_input = ("0", "F", "False", "N", "f", "false")
+
     def __init__(self, ext_args=None):
         super().__init__("UKN")
-        #self.state = None
         self.setStyleSheet(self.StyleUnknown)
         self.setMaximumWidth(32)
 
