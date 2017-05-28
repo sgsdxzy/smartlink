@@ -10,12 +10,12 @@ from smartlink import link_pb2, isNoneStringSequence
 class Logger:
     """A non-persistent object-level logger"""
     __slots__ = ["_datefmt", "_fmt", "_filename", "_file", "_buffer"]
-    _datefmt = '%Y-%m-%d %H:%M:%S'
-    _fmt = "[{level}]\t{asctime}\t{name}:\t{message}\n{exc}"
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    fmt = "[{level}]\t{asctime}\t{name}:\t{message}\n{exc}"
 
     def __init__(self, datefmt=None, fmt=None, filename=None, logbuffer=None):
-        self._datefmt = datefmt or SimpleLogger.datefmt
-        self._fmt = fmt or SimpleLogger.fmt
+        self._datefmt = datefmt or Logger.datefmt
+        self._fmt = fmt or Logger.fmt
         self._filename = filename
         if filename is not None:
             try:
@@ -39,7 +39,7 @@ class Logger:
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
             asctime=time, level="INFO", name=name, message=message, exc="")
-        print(record)
+        print(record, end="")
         if self._file:
             self._file.write(record)
 
@@ -48,7 +48,7 @@ class Logger:
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
             asctime=time, level="ERROR", name=name, message=message, exc="")
-        print(record)
+        print(record, end="")
         if self._buffer:
             self._buffer.append(record)
 
@@ -57,7 +57,7 @@ class Logger:
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
             asctime=time, level="EXCEPTION", name=name, message=message, exc=traceback.format_exc())
-        print(record)
+        print(record, end="")
         if self._buffer:
             self._buffer.append(record)
 
@@ -94,9 +94,10 @@ class Command:
     def execute(self, link):
         """Call the associated func and return the result."""
         try:
-            return self._func(*link.args)
+            result = self._func(*link.args)
             self.logger.info(self.fullname, "Executed with arguments: {args}".format(
                 args=' '.join(link.args)))
+            return result
         except Exception:
             self.logger.exception(self.fullname, "Failed to execute with arguments: {args}".format(
                 args=' '.join(link.args)))
@@ -198,7 +199,7 @@ class Update:
         Returns: the created link_pb2.Link or None is signature is empty
         """
         if self._sigs:
-            link = grp_link.links.add()
+            link = dev_link.links.add()
             link.type = link_pb2.Link.UPDATE
             link.id = self.id
             link.name = self.name
@@ -324,7 +325,7 @@ class Node:
     """
 
     def __init__(self, name):
-        self._name = name
+        self.name = name
         self.fullname = name
         self._devices = []
         # Logs go to three handlers:
@@ -334,6 +335,7 @@ class Node:
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
         logfile = os.path.join(
             pdir, "log", "{name}-{date}{ext}".format(name=name, date=str(date.today()), ext='.log'))
+        os.makedirs(os.path.join(pdir, 'log'), exist_ok=True)
         self._log_buffer = []
         self.logger = Logger(filename=logfile, logbuffer=self._log_buffer)
 

@@ -36,31 +36,21 @@ def init(index):
 
 
 def main():
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    fmt = logging.Formatter(datefmt='%Y-%m-%d %H:%M:%S',
-        fmt="[{levelname}]\t{asctime}\t{name}:\t{message}\n", style='{')
-    sthandler = logging.StreamHandler()
-    sthandler.setFormatter(fmt)
-    logger.addHandler(sthandler)
-
     node = Node("Target")
     std = node.create_device("Stand")
-    x = std.create_group("X")
-    x.create_update("Position", "float", lambda: get_position(0))
-    x.create_update("Initialized", "bool", lambda: is_inited(0))
-    x.create_command("Absolute", "float", lambda args: set_position(0, args))
-    #x.add_command("Relative", "float", lambda args:relative(0, args))
-    x.create_command("Initialize", "", lambda args: init(0))
-    y = std.create_group("Y")
-    y.create_update("Position", "float", lambda: get_position(1))
-    y.create_update("Initialized", "bool", lambda: is_inited(1))
-    y.create_command("Absolute", "float", lambda args: set_position(1, args))
-    #x.add_command("Relative", "float", lambda args:relative(0, args))
-    y.create_command("Initialize", "", lambda args: init(1))
+    std.add_update("Position", "float", lambda: get_position(0), grp="X")
+    std.add_update("Initialized", "bool", lambda: is_inited(0), grp="X")
+    std.add_command("Absolute", "float", lambda args: set_position(0, args), grp="X")
+    std.add_command("Initialize", "", lambda: init(0), grp="X")
+
+    std.add_update("Position", "float", lambda: get_position(1), grp="Y")
+    std.add_update("Initialized", "bool", lambda: is_inited(1), grp="Y")
+    std.add_command("Absolute", "float", lambda args: set_position(1, args), grp="Y")
+    std.add_command("Initialize", "", lambda: init(1), grp="Y")
+
 
     loop = asyncio.get_event_loop()
-    server = NodeServer(node, interval=0.5, loop=loop)
+    server = NodeServer(node, interval=0.2, loop=loop)
     server.start()
     try:
         loop.run_forever()

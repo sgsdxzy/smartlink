@@ -6,28 +6,31 @@ from asyncio import ensure_future
 import traceback
 from datetime import datetime
 
-from PyQt5.QtWidgets import QTextEdit, QPushButton, QFrame, QHBoxLayout, QVBoxLayout, QGridLayout, QLabel
+from PyQt5.QtWidgets import (QLineEdit, QTextEdit, QPushButton, QFrame,
+    QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QStatusBar, QFileDialog)
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import pyqtSlot, QTimer
+from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 
 from google.protobuf.message import DecodeError
 
 from smartlink import EndOfStreamError, ProtocalError, StreamReadWriter, link_pb2, varint
-from smartlink.widgets import *
+from smartlink.widgets import UStrWidget, UFloatWidget, UBoolWidget, CStrWidget, CFloatWidget
 
 
 class Logger(QTextEdit):
     """A non-persistent object-level logger with a QTextEdit display"""
-    _datefmt = '%Y-%m-%d %H:%M:%S'
-    _fmt = "[{source}:{level}]\t{asctime}\t{name}:\t{message}\n{exc}"
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    fmt = "[{source}:{level}]\t{asctime}\t{name}:\t{message}\n{exc}"
 
-    def __init__(self, datefmt=None, fmt=None):
+    def __init__(self, btn=None, datefmt=None, fmt=None):
         super().__init__()
+        self._btn = btn
         self._datefmt = datefmt or Logger.datefmt
         self._fmt = fmt or Logger.fmt
 
         self.setReadOnly(True)
         self.setWindowTitle("Log Viewer")
+        self.resize(800, 400)
         self.hide()
 
     def info(self, name, message, source="CONTROL"):
@@ -41,6 +44,7 @@ class Logger(QTextEdit):
         record = self._fmt.format(
             asctime=time, source=source, level="ERROR", name=name, message=message, exc="")
         self.insertPlainText(record)
+        self._notify_btn()
 
     def exception(self, name, message, source="CONTROL"):
         """Show the message and traceback."""
@@ -48,12 +52,18 @@ class Logger(QTextEdit):
         record = self._fmt.format(
             asctime=time, source=source, level="EXCEPTION", name=name, message=message, exc=traceback.format_exc())
         self.insertPlainText(record)
+        self._notify_btn()
 
     def remote(self, record):
         """Show log record received from nodeserver"""
         record = "[NODE:" + record[1:]
         self.insertPlainText(record)
+        self._notify_btn()
 
+    def _notify_btn(self):
+        if self._btn:
+            if not self._btn.isVisible():
+                self._btn.setText("(New) Log")
 
 class CommandWidget(QFrame):
     """A widget to handle user commands."""
@@ -62,13 +72,13 @@ class CommandWidget(QFrame):
         "float": CFloatWidget,
     }
     _StyleNormal = "CommandWidget { border: 1px solid #CCCCCC; }"
-    __StyleError = "CommandWidget { border: 1px solid #FF0000; }"
+    _StyleError = "CommandWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, dev_panel, desc_link):
         super().__init__()
         self._dev_panel = dev_panel
         self._desc_link = desc_link
-        self.id = desc_link.id
+        self.id_ = desc_link.id
         self.name = desc_link.name
         self.grp = desc_link.group
         if self.grp:
@@ -143,13 +153,11 @@ class CommandWidget(QFrame):
         Returns: the created link_pb2.Link or None if invalid
         """
         cmds = tuple(str(widget.get_arg()) for widget in self._widget_list)
-        if not all(cmds):
-            self.setStyleSheet(self.__StyleError)
-            QTimer.singleShot(1000, self._light_flash)
+        if not (cmds and all(cmds)):
             return None
         else:
             link = dev_link.links.add()
-            link.id = self.id
+            link.id = self.id_
             link.args.extend(cmds)
             return link
 
@@ -166,7 +174,7 @@ class CommandWidget(QFrame):
         else:
             link = dev_link.links.add()
             link.type = link_pb2.Link.COMMAND
-            link.id = self.id
+            link.id = self.id_
             link.name = self.name
             link.group = self.grp
             link.sigs.extend(self._desc_link.sigs)
@@ -186,14 +194,19 @@ class CommandWidget(QFrame):
 
     @pyqtSlot()
     def _send_command(self):
-        """Send command to nodeserver.
-
-        Returns: None
-        """
-        node_link = link_pb2.NodeLink()
-        dev_link = node_link.dev_links.add()
-        if self.get_link(dev_link):
-            dev_link.id = self._dev_panel.id
+        """Send command to nodeserver."""
+        cmds = tuple(str(widget.get_arg()) for widget in self._widget_list)
+        if not all(cmds):
+            self.setStyleSheet(self._StyleError)
+            QTimer.singleShot(1000, self._light_flash)
+            return
+        else:
+            node_link = link_pb2.NodeLink()
+            dev_link = node_link.dev_links.add()
+            dev_link.id = self._dev_panel.id_
+            link = dev_link.links.add()
+            link.id = self.id_
+            link.args.extend(cmds)
             self._dev_panel.send_command(node_link)
 
 
@@ -205,13 +218,13 @@ class UpdateWidget(QFrame):
         "bool": UBoolWidget,
     }
     _StyleNormal = "UpdateWidget { border: 1px solid #CCCCCC; }"
-    __StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
+    _StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, dev_panel, desc_link):
         super().__init__()
         self._dev_panel = dev_panel
         self._desc_link = desc_link
-        self.id = desc_link.id
+        self.id_ = desc_link.id
         self.name = desc_link.name
         self.grp = desc_link.group
         if self.grp:
@@ -280,7 +293,7 @@ class UpdateWidget(QFrame):
                 self._widget_list[i].set_arg(arg)
         except Exception:
             self.logger.exception(self.fullname, "Failed to display update.")
-            self.setStyleSheet(self.__StyleError)
+            self.setStyleSheet(self._StyleError)
             QTimer.singleShot(1000, self._light_flash)
 
     def get_status(self, dev_link):
@@ -291,7 +304,7 @@ class UpdateWidget(QFrame):
         """
         link = dev_link.links.add()
         link.type = link_pb2.Link.UPDATE
-        link.id = self.id
+        link.id = self.id_
         link.name = self.name
         link.group = self.grp
         link.sigs.extend(self._desc_link.sigs)
@@ -324,6 +337,7 @@ class GroupPanel(QFrame):
         self._row_list = [QHBoxLayout()]
         self._layout.addLayout(self._row_list[-1])
 
+        self._num_widgets = 0
         self._col_index = 0
 
     def add_widget(self, widget):
@@ -338,12 +352,21 @@ class GroupPanel(QFrame):
             self._col_index = 0
         self._row_list[-1].addWidget(widget)
         self._col_index += widget.widget_length
+        self._num_widgets += 1
 
     def finish_adding(self):
         """Call this method when all widgets have been added to this group panel.
-        It re-arranges widgets and release intermediate variables."""
-        self._row_list[-1].addStretch(1)
-        del self._col_index
+        It re-arranges widgets and release intermediate variables.
+
+        Returns: True is this panel has widgets or False if it is empty.
+        """
+        if self._num_widgets == 0:
+            return False
+        else:
+            self._row_list[-1].addStretch(1)
+            del self._num_widgets
+            del self._col_index
+            return True
 
 
 class DevicePanel(QFrame):
@@ -359,7 +382,7 @@ class DevicePanel(QFrame):
         super().__init__()
         self._node_panel = node_panel
         self._desc_link = desc_link
-        self.id = desc_link.id
+        self.id_ = desc_link.id
         self.name = desc_link.name
         self.fullname = '.'.join((node_panel.fullname, self.name))
         self.logger = node_panel.logger
@@ -408,10 +431,10 @@ class DevicePanel(QFrame):
             try:
                 if link.type == link_pb2.Link.COMMAND:
                     widget = CommandWidget(self, link)
-                    self._commands[widget.id] = widget
+                    self._commands[link.id] = widget
                 else:  # link.type == link_pb2.Link.UPDATE:
                     widget = UpdateWidget(self, link)
-                    self._updates[widget.id] = widget
+                    self._updates[link.id] = widget
             except RuntimeError:
                 # Widget creation failed, already logged
                 continue
@@ -421,8 +444,14 @@ class DevicePanel(QFrame):
                 self.logger.error(
                     self.fullname, "Unknown group name: {name}".format(name=link.group))
 
-        for grp_panel in self._groups.values():
-            grp_panel.finish_adding()
+        empty_groups = []
+        for grp, grp_panel in self._groups.items():
+            if not grp_panel.finish_adding():
+                #empty group, delete this panel
+                empty_groups.append(grp)
+                grp_panel.deleteLater()
+        for grp in empty_groups:
+            del self._groups[grp]
 
     @pyqtSlot()
     def _save_status(self):
@@ -432,7 +461,8 @@ class DevicePanel(QFrame):
             pdir, "save", "{name} {time} status{ext}".format(name=self.fullname,
                                                              time=time, ext='.txt'))
         filenames = QFileDialog.getSaveFileName(self, 'Save status file',
-                                                stfile, 'Data file (*.txt);;Any file (*)', None, QFileDialog.DontUseNativeDialog)
+                                                stfile, 'Data file (*.txt);;Any file (*)',
+                                                None, QFileDialog.DontUseNativeDialog)
         filename = filenames[0]
         if filename:
             status_link = self._get_status_link()
@@ -450,7 +480,7 @@ class DevicePanel(QFrame):
         Returns: the created link_pb2.DeviceLink or None if empty.
         """
         dev_link = link_pb2.DeviceLink()
-        dev_link.id = self.id
+        dev_link.id = self.id_
         dev_link.name = self.name
         for update in self._updates.values():
             update.get_status(dev_link)
@@ -467,7 +497,8 @@ class DevicePanel(QFrame):
             pdir, "save", "{name} {time} commands{ext}".format(name=self.fullname,
                                                                time=time, ext='.txt'))
         filenames = QFileDialog.getSaveFileName(self, 'Save command file',
-                                                stfile, 'Data file (*.txt);;Any file (*)', None, QFileDialog.DontUseNativeDialog)
+                                                stfile, 'Data file (*.txt);;Any file (*)',
+                                                None, QFileDialog.DontUseNativeDialog)
         filename = filenames[0]
         if filename:
             cmd_link = self._get_full_cmd_link()
@@ -490,7 +521,7 @@ class DevicePanel(QFrame):
         Returns: the created link_pb2.DeviceLink or None if empty.
         """
         dev_link = link_pb2.DeviceLink()
-        dev_link.id = self.id
+        dev_link.id = self.id_
         dev_link.name = self.name
         for cmd in self._commands.values():
             cmd.get_full_cmd(dev_link)
@@ -580,7 +611,7 @@ class DevicePanel(QFrame):
         Returns: the created link_pb2.DeviceLink or None if empty.
         """
         dev_link = node_link.dev_links.add()
-        dev_link.id = self.id
+        dev_link.id = self.id_
         for cmd in self._commands.values():
             cmd.get_cmd(dev_link)
         if not dev_link.links:  # empty
@@ -638,13 +669,13 @@ class NodePanel(QFrame):
         self._title = QLabel("Not connected")
         self._title.setFont(self._title_font)
         self._title.setAlignment(Qt.AlignCenter)
-        self._outer_layout.addWidget(self.title, 0, 2)
+        self._outer_layout.addWidget(self._title, 0, 2)
         self._status_bar = QStatusBar()
         self._outer_layout.addWidget(self._status_bar, 6, 0, 1, 4)
         self._connect_btn = QPushButton("Connect")
         self._reconnect_btn = QPushButton("Reconnect")
         self._disconnect_btn = QPushButton("Disconnect")
-        self._log_btn = QPushButton("Log viewer")
+        self._log_btn = QPushButton("Log")
         self._close_btn = QPushButton("X")
         self._close_btn.setFixedSize(24, 24)
         self._outer_layout.addWidget(self._connect_btn, 1, 0,)
@@ -667,8 +698,8 @@ class NodePanel(QFrame):
         Returns: None
         """
         self._devices.clear()
-        while self.layout.count():
-            child = self.layout.takeAt(0)
+        while self._layout.count():
+            child = self._layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
@@ -681,14 +712,14 @@ class NodePanel(QFrame):
         for dev_link in self._desc_link.dev_links:
             dev_panel = DevicePanel(self, dev_link)
             self._devices[dev_link.id] = dev_panel
-            self.layout.addWidget(dev_panel)
+            self._layout.addWidget(dev_panel)
 
     @pyqtSlot()
     def _connect_btn_exec(self):
         if not self._connected:
             self._clear_devices()
             self._host_ip = self._host_edit.text()
-            msg = "Connecting to {ip}".format(self._host_ip)
+            msg = "Connecting to {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
             self.logger.info("", msg, "PANEL")
             self._status_light.setStyleSheet(self._StyleWorking)
@@ -714,7 +745,7 @@ class NodePanel(QFrame):
             self.fullname = self._desc_link.name
             self._generate_panel()
             self._status_light.setStyleSheet(self._StyleReady)
-            msg = "Connected to {ip}".format(self._host_ip)
+            msg = "Connected to {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
             self.logger.info("", msg, "PANEL")
             self._readwriter.write("RDY".encode("ascii"))
@@ -736,18 +767,18 @@ class NodePanel(QFrame):
 
         except EndOfStreamError:
             if self._peaceful_disconnect:
-                msg = "Disconnected from server {ip}".format(self._host_ip)
+                msg = "Disconnected from server {ip}".format(ip=self._host_ip)
                 self._status_bar.showMessage(msg)
                 self.logger.info("", msg, "PANEL")
                 self._status_light.setStyleSheet(self._StyleDisabled)
             else:
                 msg = "Server at {ip} dropped connection.".format(
-                    self._host_ip)
+                    ip=self._host_ip)
                 self._status_bar.showMessage(msg)
                 self.logger.error("", msg, "PANEL")
                 self._status_light.setStyleSheet(self._StyleError)
         except Exception as err:
-            msg = "Lost connection to {ip}.".format(self._host_ip)
+            msg = "Lost connection to {ip}.".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
             self._status_light.setStyleSheet(self._StyleError)
             if isinstance(err, DecodeError):
@@ -768,7 +799,7 @@ class NodePanel(QFrame):
             if self._readwriter is not None:
                 self._readwriter.close()
             self._peaceful_disconnect = True
-            msg = "Disconnecting from server {ip}".format(self._host_ip)
+            msg = "Disconnecting from server {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
 
     @pyqtSlot()
@@ -781,6 +812,7 @@ class NodePanel(QFrame):
         if self.logger.isVisible():
             self.logger.hide()
         else:
+            self._log_btn.setText("Log")
             self.logger.show()
 
     @pyqtSlot()
