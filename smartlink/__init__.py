@@ -1,15 +1,23 @@
+"""Common classes and routines."""
+from collections.abc import Sequence
+
+from smartlink import varint
+
 class EndOfStreamError(EOFError):
     """Raised when the ther side closed connection."""
     pass
+
 
 class ProtocalError(RuntimeError):
     """Raised when the other side of connection does not speak smartlink
     protocal."""
     pass
 
+
 class StreamReadWriter:
     """Class for storing the StreaReader and StreamWriter pair"""
     __slots__ = ["_reader", "_writer"]
+
     def __init__(self, reader, writer):
         self._reader = reader
         self._writer = writer
@@ -38,3 +46,6 @@ class StreamReadWriter:
 
     def close(self):
         self._writer.close()
+
+def isNoneStringSequence(obj):
+    return isinstance(obj, Sequence) and not isinstance(obj, str)

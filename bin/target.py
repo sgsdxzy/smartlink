@@ -38,7 +38,10 @@ def init(index):
 def main():
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
+    fmt = logging.Formatter(datefmt='%Y-%m-%d %H:%M:%S',
+        fmt="[{levelname}]\t{asctime}\t{name}:\t{message}\n", style='{')
     sthandler = logging.StreamHandler()
+    sthandler.setFormatter(fmt)
     logger.addHandler(sthandler)
 
     node = Node("Target")

@@ -7,6 +7,7 @@ This module adapts from https://github.com/fmoo/python-varint/blob/master/varint
 but instead of working on stream, it works on asyncio.ReaderStream.
 """
 
+
 def encode(number):
     """Pack `number` into varint bytes"""
     buf = bytearray()
@@ -19,6 +20,7 @@ def encode(number):
             buf.append(towrite)
             break
     return buf
+
 
 async def decode(stream):
     """Read a varint from `stream`"""

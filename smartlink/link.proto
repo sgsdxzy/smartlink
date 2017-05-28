@@ -8,8 +8,8 @@ message Link {
     Type type = 1;
     uint32 id = 2;
     string name = 3;
-    string sig = 4;    // Describe the signature of operation
-    string data = 5;
+    repeated string sigs = 4;    // Describe the signature of operation
+    repeated string args = 5;
 }
 
 message GroupLink {
@@ -29,5 +29,6 @@ message DeviceLink {
 message NodeLink {
     string name = 1;
     string msg = 2;
+    repeated string logs = 3;
     repeated DeviceLink dev_links = 4;
 }
