@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 sthandler = logging.StreamHandler()
 fmt = logging.Formatter(datefmt='%Y-%m-%d %H:%M:%S',
-    fmt="[SERVER]\t[{level}]\t{asctime}\t{message}", style='{')
+                        fmt="[SERVER]\t[{level}]\t{asctime}\t{message}", style='{')
 sthandler.setFormatter(fmt)
 logger.addHandler(sthandler)
+
 
 class NodeServer:
     """Asyncio socket server for handling connection from controls."""
@@ -111,7 +112,8 @@ class NodeServer:
                 self._node.execute(cmd_link)
         except EndOfStreamError:
             # client disconnects
-            logger.info("Client from {ip} disconnected.".format(ip=client.peername))
+            logger.info("Client from {ip} disconnected.".format(
+                ip=client.peername))
         except DecodeError:
             # purposely drop connection
             logger.error(

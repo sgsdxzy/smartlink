@@ -3,6 +3,7 @@ from collections.abc import Sequence
 
 from smartlink import varint
 
+
 class EndOfStreamError(EOFError):
     """Raised when the ther side closed connection."""
     pass
@@ -46,6 +47,7 @@ class StreamReadWriter:
 
     def close(self):
         self._writer.close()
+
 
 def isNoneStringSequence(obj):
     return isinstance(obj, Sequence) and not isinstance(obj, str)

@@ -7,6 +7,7 @@ These two methods shouldn't raise any exception.
 from PyQt5.QtWidgets import QLineEdit, QPushButton
 from PyQt5.QtGui import QDoubleValidator
 
+
 class StrWidget(QLineEdit):
     """Widget for handling "str" type signature."""
 
