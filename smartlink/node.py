@@ -9,8 +9,9 @@ from smartlink import link_pb2, isNoneStringSequence
 
 class Logger:
     """A non-persistent object-level logger"""
+    __slots__ = ["_datefmt", "_fmt", "_filename", "_file", "_buffer"]
     _datefmt = '%Y-%m-%d %H:%M:%S'
-    _fmt = "[{level}]\t{asctime}\t{name}:\t{message}\n"
+    _fmt = "[{level}]\t{asctime}\t{name}:\t{message}\n{exc}"
 
     def __init__(self, datefmt=None, fmt=None, filename=None, logbuffer=None):
         self._datefmt = datefmt or SimpleLogger.datefmt
@@ -37,7 +38,7 @@ class Logger:
         """Print the message and log it to file"""
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
-            asctime=time, level="INFO", name=name, message=message)
+            asctime=time, level="INFO", name=name, message=message, exc="")
         print(record)
         if self._file:
             self._file.write(record)
@@ -46,7 +47,7 @@ class Logger:
         """Print the message, then append it to logbuffer"""
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
-            asctime=time, level="ERROR", name=name, message=message)
+            asctime=time, level="ERROR", name=name, message=message, exc="")
         print(record)
         if self._buffer:
             self._buffer.append(record)
@@ -55,8 +56,7 @@ class Logger:
         """Print the message and traceback, then append them to logbuffer"""
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
-            asctime=time, level="EXCEPTION", name=name, message=message)
-        record += traceback.format_exc()
+            asctime=time, level="EXCEPTION", name=name, message=message, exc=traceback.format_exc())
         print(record)
         if self._buffer:
             self._buffer.append(record)
@@ -64,14 +64,18 @@ class Logger:
 
 class Command:
     """Command is the type of operation sent by control to be executed on node."""
-    __slots__ = ["_grp", "_id", "_name", "_fullname",
-                 "_sigs", "_func", "_ext_args", "_logger"]
+    __slots__ = ["_dev", "id", "name", "_grp", "fullname",
+                 "_sigs", "_func", "_ext_args", "logger"]
 
-    def __init__(self, grp, id_, name, sigs, func, ext_args=None):
+    def __init__(self, dev, id_, name, sigs, func, ext_args=None, grp=""):
+        self._dev = dev
+        self.id = id_
+        self.name = name
         self._grp = grp
-        self._id = id_
-        self._name = name
-        self._fullname = '.'.join((grp._fullname, name))
+        if grp:
+            self.fullname = '.'.join((dev.fullname, grp, name))
+        else:
+            self.fullname = '.'.join((dev.fullname, name))
         if not sigs:
             self._sigs = None
         elif isNoneStringSequence(sigs):
@@ -85,27 +89,28 @@ class Command:
             self._ext_args = ext_args
         else:
             self._ext_args = (ext_args, )
-        self._logger = grp._logger
+        self.logger = dev.logger
 
     def execute(self, link):
         """Call the associated func and return the result."""
         try:
             return self._func(*link.args)
-            self._logger.info(self._fullname, "Executed with arguments: {args}".format(
+            self.logger.info(self.fullname, "Executed with arguments: {args}".format(
                 args=' '.join(link.args)))
         except Exception:
-            self._logger.exception(self._fullname, "Failed to execute with arguments: {args}".format(
+            self.logger.exception(self.fullname, "Failed to execute with arguments: {args}".format(
                 args=' '.join(link.args)))
 
-    def get_desc_link(self, grp_link):
-        """Generate a description link to describe this Command, then append it to grp_link.
+    def get_desc(self, dev_link):
+        """Generate a description link to describe this Command, then append it to dev_link.
 
         Returns: the created link_pb2.Link
         """
-        link = grp_link.links.add()
+        link = dev_link.links.add()
         link.type = link_pb2.Link.COMMAND
-        link.id = self._id
-        link.name = self._name
+        link.id = self.id
+        link.name = self.name
+        link.group = self._grp
         if self._sigs:
             link.sigs.extend(self._sigs)
         if self._ext_args:
@@ -117,14 +122,18 @@ class Update:
     """Update is the type of operation executed on node to display the result on
     control.
     """
-    __slots__ = ["_grp", "_id", "_name", "_fullname", "_sigs",
-                 "_func", "_ext_args", "_old", "_logger"]
+    __slots__ = ["_dev", "id", "name", "_grp", "fullname",
+                 "_sigs", "_func", "_ext_args", "logger", "_old"]
 
-    def __init__(self, grp, id_, name, sigs, func, ext_args=None):
+    def __init__(self, dev, id_, name, sigs, func, ext_args=None, grp=""):
+        self._dev = dev
+        self.id = id_
+        self.name = name
         self._grp = grp
-        self._id = id_
-        self._name = name
-        self._fullname = '.'.join((grp._fullname, name))
+        if grp:
+            self.fullname = '.'.join((dev.fullname, grp, name))
+        else:
+            self.fullname = '.'.join((dev.fullname, name))
         if not sigs:
             self._sigs = None
         elif isNoneStringSequence(sigs):
@@ -138,12 +147,12 @@ class Update:
             self._ext_args = ext_args
         else:
             self._ext_args = (ext_args, )
+        self.logger = dev.logger
         self._old = None
-        self._logger = grp._logger
 
-    def get_link(self, grp_link):
-        """Execute the associated func and if the result is different from prev,
-        wrap the result in a link_pb2.Link and append it to grp_link.
+    def get_update(self, dev_link):
+        """Execute the associated func and if the result is different from old,
+        wrap the result in a link_pb2.Link and append it to dev_link.
 
         Returns: the created link_pb2.Link if has new result or None
         """
@@ -153,8 +162,8 @@ class Update:
                 return None
             else:
                 self._old = new
-                link = grp_link.links.add()
-                link.id = self._id
+                link = dev_link.links.add()
+                link.id = self.id
                 if isinstance(new, tuple):
                     # func() returns multiple results
                     link.args.extend(str(result) for result in new)
@@ -162,18 +171,18 @@ class Update:
                     link.args.append(str(new))
                 return link
         except Exception:
-            self._logger.exception(self._fullname, "Failed to update.")
+            self.logger.exception(self.fullname, "Failed to update.")
 
-    def get_full_link(self, grp_link):
+    def get_full_update(self, dev_link):
         """Execute the associated func, wrap the result in a link_pb2.Link and
-        append it to grp_link.
+        append it to dev_link.
 
         Returns: the created link_pb2.Link
         """
         try:
             new = self._func()
-            link = grp_link.links.add()
-            link.id = self._id
+            link = dev_link.links.add()
+            link.id = self.id
             if isinstance(new, tuple):
                 # func() returns multiple results
                 link.args.extend(str(result) for result in new)
@@ -181,18 +190,19 @@ class Update:
                 link.args.append(str(new))
             return link
         except Exception:
-            self._logger.exception(self._fullname, "Failed to update.")
+            self.logger.exception(self.fullname, "Failed to update.")
 
-    def get_desc_link(self, grp_link):
-        """Generate a description link to describe this Update, then append it to grp_link.
+    def get_desc(self, dev_link):
+        """Generate a description link to describe this Update, then append it to dev_link.
 
-        Returns: the created link_pb2.Link or None is signature is empty or None
+        Returns: the created link_pb2.Link or None is signature is empty
         """
         if self._sigs:
             link = grp_link.links.add()
             link.type = link_pb2.Link.UPDATE
-            link.id = self._id
-            link.name = self._name
+            link.id = self.id
+            link.name = self.name
+            link.group = self._grp
             link.sigs.extend(self._sigs)
             if self._ext_args:
                 link.args.extend(self._ext_args)
@@ -201,181 +211,110 @@ class Update:
             return None
 
 
-class OperationGroup:
-    """An OperationGroup is a group of interrelated Commands or Updates whose
-    generated UI on control should be grouped together.
+class Device:
+    """A Device is the programming correspondence to a physical device. It may
+    contain one or more OperationGroups. An OperationGroup is a group of
+    interrelated Commands or Updates whose generated UI on control should be
+    grouped together. Device is the basic unit for configuration saving/loading
+    and logging.
     """
-    __slots__ = ["_dev", "_id", "_name", "_fullname", "_desc",
-                 "_commands", "_updates", "_logger"]
 
-    def __init__(self, dev, id_, name, desc=None):
-        self._dev = dev
-        self._id = id_
-        self._name = name
-        self._fullname = '.'.join((dev._fullname, name))
-        self._desc = desc
+    def __init__(self, node, id_, name):
+        self._node = node
+        self.id = id_
+        self.name = name
+        self.fullname = '.'.join((node.fullname, name))
+        self._groups = [""]
         self._commands = []
         self._updates = []
-        self._logger = dev.logger
+        self.logger = node.logger
 
-    def add_command(self, name, sigs, func, ext_args=None):
-        """Create a new Command for this group.
-
-        Returns: the created Command.
-        """
-        id_ = len(self._commands)
-        cmd = Command(self, id_, name, sigs, func, ext_args)
-        self._commands.append(cmd)
-        return cmd
-
-    def add_update(self, name, sigs, func, ext_args=None):
-        """Create a new Update for this group.
-
-        Returns: the created Update.
-        """
-        id_ = len(self._updates)
-        update = Update(self, id_, name, sigs, func, ext_args)
-        self._updates.append(update)
-        return update
-
-    def get_link(self, dev_link):
-        """Get updates from the list of Updates, wrap them in a GroupLink, then
-        append them to dev_link.
-
-        Returns: the created link_pb2.GroupLink or None if GroupLink is empty
-        """
-        grp_link = dev_link.grp_links.add()
-        grp_link.id = self._id
-        for update in self._updates:
-            update.get_link(grp_link)
-        if not grp_link.links:  # empty
-            del dev_link.grp_links[-1]
-            return None
-        else:
-            return grp_link
-
-    def get_full_link(self, dev_link):
-        """Get full updates from the list of Updates, wrap them in a GroupLink,
-        then append them to dev_link.
-
-        Returns: the created link_pb2.GroupLink
-        """
-        grp_link = dev_link.grp_links.add()
-        grp_link.id = self._id
-        for update in self._updates:
-            update.get_full_link(grp_link)
-        return grp_link
-
-    def get_desc_link(self, dev_link):
-        """Generate a description link to describe this OperationGroup, then
-        append it to dev_link.
-
-        Returns: the created link_pb2.GroupLink
-        """
-        grp_link = dev_link.grp_links.add()
-        grp_link.id = self._id
-        grp_link.name = self._name
-        if self._desc:
-            grp_link.msg = self._desc
-        for update in self._updates:
-            update.get_desc_link(grp_link)
-        for cmd in self._commands:
-            cmd.get_desc_link(grp_link)
-        return grp_link
-
-    def execute(self, grp_link):
-        """Handle links in grp_link to corresponding Commands and executes them.
+    def add_group(self, name):
+        """Create a new OperationGroup with name.
 
         Returns: None
         """
-        for link in grp_link.links:
-            try:
-                cmd = self._commands[link.id]
-                cmd.execute(link)
-            except IndexError:
-                self._logger.error(
-                    self._fullname, "Wrong command id: {id}".format(id=grp_link.id))
+        self._groups.append(name)
 
+    def add_command(self, name, sigs, func, ext_args=None, grp=""):
+        """Create a new Command and add it to group `grp`. If the group does not
+        exist, it will be created first.
 
-class Device:
-    """A Device is the programming correspondence to a physical device. It may
-    contain one or more OperationGroups. Device is the basic unit for configuration
-    saving/loading and logging.
-    """
-
-    def __init__(self, node, id_, name, desc=None):
-        self._node = node
-        self._id = id_
-        self._name = name
-        self._fullname = '.'.join((node._fullname, name))
-        self._desc = desc
-        self._groups = []
-        self.logger = node.logger
-
-    def add_group(self, name, desc=None):
-        """Create a new OperationGroup with name and desc.
-
-        Returns: the created OperationGroup.
+        Returns: the created Command.
         """
-        id_ = len(self._groups)
-        grp = OperationGroup(self, id_, name, desc)
-        self._groups.append(grp)
-        return grp
+        if not grp in self._groups:
+            self._groups.append(grp)
+        id_ = len(self._commands)
+        cmd = Command(self, id_, name, sigs, func, ext_args, grp)
+        self._commands.append(cmd)
+        return cmd
 
-    def get_link(self, node_link):
-        """Get updates from groups, wrap them in a DeviceLink, then
-        append them to node_link.
+    def add_update(self, name, sigs, func, ext_args=None, grp=""):
+        """Create a new Update and add it to group `grp`. If the group does not
+        exist, it will be created first.
 
-        Returns: the created link_pb2.DeviceLink or None if DeviceLink is empty
+        Returns: the created Update.
+        """
+        if not grp in self._groups:
+            self._groups.append(grp)
+        id_ = len(self._updates)
+        update = Update(self, id_, name, sigs, func, ext_args, grp)
+        self._updates.append(update)
+        return update
+
+    def get_update(self, node_link):
+        """Get updates, wrap them in a DeviceLink, then append them to node_link.
+
+        Returns: the created link_pb2.DeviceLink or None if empty
         """
         dev_link = node_link.dev_links.add()
-        dev_link.id = self._id
-        for grp in self._groups:
-            grp.get_link(dev_link)
-        if not dev_link.grp_links:  # empty
+        dev_link.id = self.id
+        for update in self._updates:
+            update.get_update(dev_link)
+        if not dev_link.links:  # empty
             del node_link.dev_links[-1]
             return None
         return dev_link
 
-    def get_full_link(self, node_link):
-        """Get full updates from groups, wrap them in a DeviceLink, then
-        append them to node_link.
+    def get_full_update(self, node_link):
+        """Get full updates, wrap them in a DeviceLink, then append them to node_link.
 
         Returns: the created link_pb2.DeviceLink
         """
         dev_link = node_link.dev_links.add()
-        dev_link.id = self._id
-        for grp in self._groups:
-            grp.get_full_link(dev_link)
+        dev_link.id = self.id
+        for update in self._updates:
+            update.get_full_update(dev_link)
         return dev_link
 
-    def get_desc_link(self, node_link):
+    def get_desc(self, node_link):
         """Generate a description link to describe this Device, then
         append it to node_link.
 
         Returns: the created link_pb2.DeviceLink
         """
         dev_link = node_link.dev_links.add()
-        dev_link.id = self._id
-        dev_link.name = self._name
-        if self._desc:
-            dev_link.msg = self._desc
-        for grp in self._groups:
-            grp.get_desc_link(dev_link)
+        dev_link.id = self.id
+        dev_link.name = self.name
+        dev_link.groups.extend(self._groups)
+        for update in self._updates:
+            update.get_desc(dev_link)
+        for cmd in self._commands:
+            cmd.get_desc(dev_link)
         return dev_link
 
     def execute(self, dev_link):
-        """Handle links in dev_link to corresponding OperationGroups and executes them.
+        """Handle links in dev_link to corresponding Commands and executes them.
 
         Returns: None
         """
-        for grp_link in dev_link.grp_links:
+        for link in dev_link.links:
             try:
-                grp = self._groups[grp_link.id]
-                grp.execute(grp_link)
+                cmd = self._commands[link.id]
+                cmd.execute(link)
             except IndexError:
-                self._logger.error(
-                    self._fullname, "Wrong group id: {id}".format(id=grp_link.id))
+                self.logger.error(
+                    self.fullname, "Wrong command id: {id}".format(id=link.id))
 
 
 class Node:
@@ -384,10 +323,9 @@ class Node:
     Node is the basic unit of network communication with control.
     """
 
-    def __init__(self, name, desc=None):
+    def __init__(self, name):
         self._name = name
-        self._fullname = self._name
-        self._desc = desc
+        self.fullname = name
         self._devices = []
         # Logs go to three handlers:
         #   1. All logs are printed to stdout
@@ -411,35 +349,35 @@ class Node:
         when log has been successfully sent."""
         self._log_buffer.clear()
 
-    def create_device(self, name, desc=None):
-        """Create a new Device with name and desc.
+    def create_device(self, name):
+        """Create a new Device with name.
 
         Returns: the created Device.
         """
         id_ = len(self._devices)
-        dev = Device(self, id_, name, desc)
+        dev = Device(self, id_, name)
         self._devices.append(dev)
         return dev
 
-    def get_link(self):
+    def get_update_link(self):
         """Get updates from devices and wrap them in a NodeLink.
 
         Returns: the created link_pb2.NodeLink
         """
         node_link = link_pb2.NodeLink()
         for dev in self._devices:
-            dev.get_link(node_link)
+            dev.get_update(node_link)
         node_link.logs.extend(self._log_buffer)
         return node_link
 
-    def get_full_link(self):
+    def get_full_update_link(self):
         """Get full updates from devices and wrap them in a NodeLink.
 
         Returns: the created link_pb2.NodeLink
         """
         node_link = link_pb2.NodeLink()
         for dev in self._devices:
-            dev.get_full_link(node_link)
+            dev.get_full_update(node_link)
         return node_link
 
     def get_desc_link(self):
@@ -448,11 +386,9 @@ class Node:
         Returns: the created link_pb2.NodeLink
         """
         node_link = link_pb2.NodeLink()
-        node_link.name = self._name
-        if self._desc:
-            node_link.msg = self._desc
+        node_link.name = self.name
         for dev in self._devices:
-            dev.get_desc_link(node_link)
+            dev.get_desc(node_link)
         return node_link
 
     def execute(self, node_link):
@@ -466,4 +402,4 @@ class Node:
                 dev.execute(dev_link)
             except IndexError:
                 self.logger.error(
-                    self._fullname, "Wrong device id: {id}".format(id=dev_link.id))
+                    self.fullname, "Wrong device id: {id}".format(id=dev_link.id))

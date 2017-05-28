@@ -2,12 +2,10 @@
 Widgets need to implement:
     get_arg() -> str
     set_arg(str)
+These two methods shouldn't raise any exception.
 """
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
-from PyQt5.QtCore import *
-from PyQt5.QtNetwork import *
-
+from PyQt5.QtWidgets import QLineEdit, QPushButton
+from PyQt5.QtGui import QDoubleValidator
 
 class StrWidget(QLineEdit):
     """Widget for handling "str" type signature."""

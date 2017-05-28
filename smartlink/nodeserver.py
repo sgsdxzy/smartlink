@@ -7,6 +7,13 @@ from smartlink import varint, EndOfStreamError, ProtocalError, StreamReadWriter
 from smartlink.link_pb2 import NodeLink
 from google.protobuf.message import DecodeError
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+sthandler = logging.StreamHandler()
+fmt = logging.Formatter(datefmt='%Y-%m-%d %H:%M:%S',
+    fmt="[SERVER]\t[{level}]\t{asctime}\t{message}", style='{')
+sthandler.setFormatter(fmt)
+logger.addHandler(sthandler)
 
 class NodeServer:
     """Asyncio socket server for handling connection from controls."""
@@ -31,17 +38,17 @@ class NodeServer:
 
     def start(self, host=None, port=5362):
         assert not self._running, "Server is already running!"
-        logging.info(
-            "Starting server listening at port {port}...".format(port=port))
+        logger.info(
+            "Starting server at port {port}...".format(port=port))
         self._server = self._loop.run_until_complete(
             asyncio.start_server(self._create_client, host, port, loop=self._loop))
         self._announce_task = ensure_future(self._announce())
         self._running = True
-        logging.info("Server started.")
+        logger.info("Server started.")
 
     def close(self):
         assert self._running, "Server is not running!"
-        logging.info("Stopping server...")
+        logger.info("Stopping server...")
         self._announce_task.cancel()
         self._announce_task = None
         self._clients.clear()
@@ -49,13 +56,13 @@ class NodeServer:
         self._loop.run_until_complete(self._server.wait_closed())
         self._node.close()
         self._running = False
-        logging.info("Server stopped.")
+        logger.info("Server stopped.")
 
     async def _announce(self):
         try:
             while True:
                 if self._clients:
-                    update_link = self._node.get_link()
+                    update_link = self._node.get_update_link()
                     bin_link = update_link.SerializeToString()
                     if bin_link:
                         # Write only when there's news to write
@@ -69,29 +76,31 @@ class NodeServer:
 
     async def _create_client(self, reader, writer):
         client = StreamReadWriter(reader, writer)
-        logging.info("Accepted connection from {ip}.".format(
+        logger.info("Accepted connection from {ip}.".format(
             ip=client.peername))
+        # Send description link
+        client.write_bin_link(self._str_desc)
+        # wait for b'RDY' from client
+        data = await client.read(3)
+        while len(data) < 3:
+            data += await client.read(3 - len(data))
+        if data != b'RDY':
+            # Not recognized respond
+            logger.error(
+                "Response from client {ip} not recognized.".format(ip=client.peername))
+            client.close()
+            return
+
+        self._clients.append(client)
+        logger.info("Client from {ip} is ready.".format(ip=client.peername))
+
+        # Send a full link
+        full_link = self._node.get_full_update_link()
+        bin_link = full_link.SerializeToString()
+        client.write_bin_link(bin_link)
+
+        # The work loop
         try:
-            # Send description link
-            client.write_bin_link(self._str_desc)
-
-            # wait for b'RDY' from client
-            data = await client.read(3)
-            while len(data) < 3:
-                data += await client.read(3 - len(data))
-            if data != b'RDY':
-                # Not recognized respond
-                raise ProtocalError
-            self._clients.append(client)
-            logging.info("Client from {ip} is ready.".format(
-                ip=client.peername))
-
-            # Send a full link
-            full_link = self._node.get_full_link()
-            bin_link = full_link.SerializeToString()
-            client.write_bin_link(bin_link)
-
-            # The work loop
             while True:
                 # Parse NodeLink
                 length = await varint.decode(client)
@@ -102,15 +111,14 @@ class NodeServer:
                 self._node.execute(cmd_link)
         except EndOfStreamError:
             # client disconnects
-            logging.info("Client from {ip} disconnected.".format(
-                ip=client.peername))
-        except (ProtocalError, DecodeError, IndexError):
+            logger.info("Client from {ip} disconnected.".format(ip=client.peername))
+        except DecodeError:
             # purposely drop connection
-            logging.exception(
-                "Dropping misbehaving client at {ip}".format(ip=client.peername))
+            logger.error(
+                "Failed to decode commands from client {ip}".format(ip=client.peername))
             client.close()
         except Exception:
-            logging.exception("Unexpected Exception!")
+            logger.exception("Unexpected Error!")
             client.close()
         finally:
             # cleanups
