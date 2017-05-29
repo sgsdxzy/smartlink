@@ -2,13 +2,16 @@ import sys
 import os
 import asyncio
 import json
+from datetime import datetime
 from collections import OrderedDict
 
 from PyQt5.QtCore import Qt, QEvent, QTimer
 # from PyQt5.QtGui import
 from PyQt5.QtWidgets import (QTabBar, QTabWidget, QApplication, QLineEdit,
                              QWidget, QStyleFactory, QHBoxLayout, QVBoxLayout, QMainWindow, QPushButton,
-                             QFrame)
+                             QFrame, QAction, QFileDialog)
+
+from google.protobuf import json_format
 
 from quamash import QEventLoop
 from smartlink.qtpanel import NodePanel
@@ -52,61 +55,6 @@ class EditableTabBar(QTabBar):
         if index >= 0:
             self._editor.hide()
             self.setTabText(index, self._editor.text())
-
-
-class EditableTabWidget(QTabWidget):
-    """A QTabWidget with editable tab names."""
-
-    def __init__(self, parent=None):
-        super().__init__()
-        self.setTabBar(EditableTabBar(self))
-        self.tabBar().setSelectionBehaviorOnRemove(self.tabBar().SelectLeftTab)
-        self.setTabsClosable(True)
-        self.tabCloseRequested.connect(self._close_tab)
-        self.setMovable(True)
-
-        self.insertTab(0, DoubleColumnPanel(self), "New Tab 1")
-        self.insertTab(1, QWidget(self), ' + ')
-        self.tabBar().tabButton(1, QTabBar.RightSide).resize(0, 0)
-        self.currentChanged.connect(self._add_tab)
-
-    def _close_tab(self, index):
-        self.widget(index).deleteLater()
-        self.removeTab(index)
-
-    def _add_tab(self, index):
-        if index == self.count() - 1:
-            '''last tab was clicked. add tab'''
-            self.insertTab(index, DoubleColumnPanel(self),
-                           "New Tab {0}".format(index + 1))
-            self.setCurrentIndex(index)
-
-    def get_config(self):
-        """Get current tab names and what are in each tab."""
-        tabs = OrderedDict()
-        for i in range(self.count() - 1):
-            tab_title = self.tabBar().tabText(i)
-            dpanel = self.widget(i)
-            tabs[tab_title] = dpanel.get_config()
-        return tabs
-
-    def restore_config(self, config):
-        """Restore config from `get_config`"""
-        # Delete all tabs first
-        for index in range(self.count() - 1):
-            self.widget(index).deleteLater()
-            self.removeTab(index)
-
-        index = 1
-        for tab_title, dpanel_config in config.items():
-            dpanel = DoubleColumnPanel(self)
-            self.insertTab(index, dpanel, tab_title)
-            index += 1
-            dpanel.restore_config(dpanel_config)
-
-        # Remove the default tab
-        self.widget(0).deleteLater()
-        self.removeTab(0)
 
 
 class DoubleColumnPanel(QWidget):
@@ -172,12 +120,96 @@ class DoubleColumnPanel(QWidget):
             node_panel.set_ip(ip)
             node_panel.set_title(title)
 
+    def get_status_links(self):
+        """Get all status in all NodePanels in this tab and append
+        them to a list."""
+        status_links = []
+        for i in range(self._leftcol.count() - 2):
+            node_panel = self._leftcol.itemAt(i).widget()
+            link = node_panel.get_status_link()
+            if link:
+                status_links.append(link)
+        for i in range(self._rightcol.count() - 2):
+            node_panel = self._rightcol.itemAt(i).widget()
+            link = node_panel.get_status_link()
+            if link:
+                status_links.append(link)
+        return status_links
+
+class EditableTabWidget(QTabWidget):
+    """A QTabWidget with editable tab names."""
+
+    def __init__(self, parent=None):
+        super().__init__()
+        self.setTabBar(EditableTabBar(self))
+        self.tabBar().setSelectionBehaviorOnRemove(self.tabBar().SelectLeftTab)
+        self.setTabsClosable(True)
+        self.tabCloseRequested.connect(self._close_tab)
+        self.setMovable(True)
+
+        self.insertTab(0, QWidget(self), ' + ')
+        self.tabBar().tabButton(0, QTabBar.RightSide).resize(0, 0)
+
+    def _close_tab(self, index):
+        self.widget(index).deleteLater()
+        self.removeTab(index)
+
+    def _add_tab(self, index):
+        if index == self.count() - 1:
+            '''last tab was clicked. add tab'''
+            self.insertTab(index, DoubleColumnPanel(self),
+                           "New Tab {0}".format(index + 1))
+            self.setCurrentIndex(index)
+
+    def enable_add_btn(self):
+        """Enable the '+' button in tabs to create new tabs. This should be
+        called after all other initialization has completed."""
+        if self.count() == 1:
+            self.insertTab(0, DoubleColumnPanel(self), "New Tab 1")
+            self.setCurrentIndex(0)
+        self.currentChanged.connect(self._add_tab)
+
+    def get_config(self):
+        """Get current tab names and what are in each tab."""
+        tabs = OrderedDict()
+        for i in range(self.count() - 1):
+            tab_title = self.tabBar().tabText(i)
+            dpanel = self.widget(i)
+            tabs[tab_title] = dpanel.get_config()
+        return tabs
+
+    def restore_config(self, config):
+        """Restore config from `get_config`"""
+        # Delete all tabs first
+        for index in range(self.count() - 1):
+            self.widget(index).deleteLater()
+            self.removeTab(index)
+
+        index = 0
+        for tab_title, dpanel_config in config.items():
+            dpanel = DoubleColumnPanel(self)
+            self.insertTab(index, dpanel, tab_title)
+            index += 0
+            dpanel.restore_config(dpanel_config)
+
+        self.setCurrentIndex(0)
+
+    def get_status_links(self):
+        """Get all status in all NodePanels and append them to a list."""
+        status_links = []
+        for i in range(self.count() - 1):
+            links = self.widget(i).get_status_links()
+            status_links.extend(links)
+        return status_links
+
 
 class ControlPanel(QMainWindow):
+    """The QApplication main window for Qt smartlink control."""
+    datefmt = '%Y-%m-%d %H:%M:%S'
     def __init__(self, parent=None):
         super().__init__(parent)
-        pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
-        self._config_file = os.path.join(pdir, "config.json")
+        self._pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
+        self._config_file = os.path.join(self._pdir, "config.json")
         self._initUI()
 
     def _initUI(self):
@@ -187,15 +219,19 @@ class ControlPanel(QMainWindow):
         self._load_config()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._save_config)
-        self._timer.start(10000)
-        #toolbar = self.addToolBar('Open')
+        self._timer.start(60000)
+        self._save_status_action = QAction('Save', self)
+        self._save_status_action.setShortcut('Ctrl+S')
+        self._save_status_action.setStatusTip('Save status file')
+        self._save_status_action.triggered.connect(self._save_all_status)
+        self.addAction(self._save_status_action)
+
 
     def _save_config(self):
         config = self.centralWidget().get_config()
         try:
             with open(self._config_file, 'w', encoding='ascii') as f:
                 json.dump(config, f, indent=2)
-            self.statusBar().showMessage("Successfully saved configuration file.")
         except OSError:
             self.statusBar().showMessage(
                 "Failed to save configuration file: {filename}".format(filename=self._config_file))
@@ -211,6 +247,28 @@ class ControlPanel(QMainWindow):
         except Exception as err:
             self.statusBar().showMessage(
                 "Unexpected error while loading configuration file: {exc}".format(exc=str(err)))
+        finally:
+            self.centralWidget().enable_add_btn()
+
+    def _save_all_status(self):
+        """Save all status in all NodePanels to file."""
+        time = datetime.today().strftime(self.datefmt)
+        stfile = os.path.join(
+            self._pdir, "save", "ALL {time} status{ext}".format(time=time, ext='.json'))
+        filenames = QFileDialog.getSaveFileName(self, 'Save status file',
+                                                stfile, 'Json file (*.json);;Any file (*)',
+                                                None, QFileDialog.DontUseNativeDialog)
+        filename = filenames[0]
+        if filename:
+            status_links = self.centralWidget().get_status_links()
+            if status_links:
+                try:
+                    with open(filename, mode='w', encoding='ascii') as f:
+                        for link in status_links:
+                            f.write(json_format.MessageToJson(link))
+                except OSError:
+                    self.statusBar().showMessage(
+                        "Failed to save status file: {filename}".format(filename=self._config_file))
 
 
 def main():

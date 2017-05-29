@@ -468,11 +468,28 @@ class DevicePanel(QFrame):
             if status_link is not None:
                 json_link = json_format.MessageToJson(status_link)
                 try:
-                    with open(filename, mode='w', encoding='utf-8') as f:
+                    with open(filename, mode='w', encoding='ascii') as f:
                         f.write(json_link)
                 except OSError:
                     self.logger.exception(
                         self.fullname, "Failed to create file: {filename}".format(filename=filename))
+
+    def get_status(self, node_link):
+        """Collect status args from updates and wrap them into a DeviceLink,
+        then append it to node_link.
+
+        Returns: the created link_pb2.DeviceLink or None if empty.
+        """
+        dev_link = node_link.dev_links.add()
+        dev_link.id = self.id_
+        dev_link.name = self.name
+        for update in self._updates.values():
+            update.get_status(dev_link)
+        if not dev_link.links:  # empty
+            del node_link.dev_links[-1]
+            return None
+        else:
+            return dev_link
 
     def _get_status_link(self):
         """Collect status args from updates and wrap them into a DeviceLink.
@@ -505,7 +522,7 @@ class DevicePanel(QFrame):
             if cmd_link is not None:
                 json_link = json_format.MessageToJson(cmd_link)
                 try:
-                    with open(filename, mode='w', encoding='utf-8') as f:
+                    with open(filename, mode='w', encoding='ascii') as f:
                         f.write(json_link)
                 except OSError:
                     self.logger.exception(
@@ -537,7 +554,7 @@ class DevicePanel(QFrame):
         filename = filenames[0]
         if filename:
             try:
-                with open(filename, mode='r', encoding='utf-8') as f:
+                with open(filename, mode='r', encoding='ascii') as f:
                     json_link = f.read()
             except OSError:
                 self.logger.exception(
@@ -826,6 +843,20 @@ class NodePanel(QFrame):
         else:
             self.logger.deleteLater()
             self.deleteLater()
+
+    def get_status_link(self):
+        """Collect status args from devices and wrap them into a NodeLink.
+
+        Returns: the created link_pb2.NodeLink or None if empty.
+        """
+        node_link = link_pb2.NodeLink()
+        for dev in self._devices.values():
+            dev.get_status(node_link)
+        if not node_link.dev_links:  # empty
+            return None
+        else:
+            node_link.name = self.fullname
+            return node_link
 
     def send_command(self, node_link):
         if self._connected:
