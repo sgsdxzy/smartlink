@@ -14,7 +14,8 @@ from google.protobuf.message import DecodeError
 from google.protobuf import json_format
 
 from smartlink import EndOfStreamError, ProtocalError, StreamReadWriter, link_pb2, varint
-from smartlink.widgets import UStrWidget, UFloatWidget, UBoolWidget, CStrWidget, CFloatWidget
+from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget,
+    UEnumWidget, CStrWidget, CFloatWidget, CIntWidget, CBoolWidget, CEnumWidget)
 
 
 class Logger(QTextEdit):
@@ -69,6 +70,9 @@ class CommandWidget(QFrame):
     _widget_dict = {
         "str": CStrWidget,
         "float": CFloatWidget,
+        "int" : CIntWidget,
+        "bool" : CBoolWidget,
+        "enum" : CEnumWidget,
     }
     _StyleNormal = "CommandWidget { border: 1px solid #CCCCCC; }"
     _StyleError = "CommandWidget { border: 1px solid #FF0000; }"
@@ -101,11 +105,6 @@ class CommandWidget(QFrame):
     def _generate_UI(self):
         """Parse desc link.sigs and generate corresponding widgets. link.sigs
         is a list describing the signature of command.
-        Currently the following types are implemented for command:
-            # int : a CIntWidget
-            float : a CFloatWidget
-            # bool : a CBoolWidget
-            str : a CStrWidget
         These command widgets should implement `get_arg() -> str` to
         get arguments. An empty string means invalid input.
         n-th link.args is passed to n-th widget's __init__ as extra arg.
@@ -214,7 +213,9 @@ class UpdateWidget(QFrame):
     _widget_dict = {
         "str": UStrWidget,
         "float": UFloatWidget,
+        "int" : UIntWidget,
         "bool": UBoolWidget,
+        "enum" : UEnumWidget,
     }
     _StyleNormal = "UpdateWidget { border: 1px solid #CCCCCC; }"
     _StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
@@ -248,10 +249,6 @@ class UpdateWidget(QFrame):
         """Parse desc link.sigs and generate corresponding widgets. link.sigs
         is a list describing the signature of update.
         Currently the following types are implemented for updates:
-            # int : a UIntWidget
-            float : a UFloatWidget
-            bool : a UBoolWidget
-            str : a UStrWidget
         These update widgets should implement `update_from(str)` to update
         its contents. n-th link.args is passed to n-th widget's __init__
         as extra arg.
@@ -772,6 +769,8 @@ class NodePanel(QFrame):
                 while len(buf) < length:
                     buf += await self._readwriter.read(length - len(buf))
                 update_link = link_pb2.NodeLink.FromString(buf)
+                for record in update_link.logs:
+                    self.logger.remote(record)
 
                 for dev_link in update_link.dev_links:
                     dev = self._devices[dev_link.id]

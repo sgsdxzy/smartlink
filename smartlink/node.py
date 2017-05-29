@@ -58,7 +58,7 @@ class Logger:
         record = self._fmt.format(
             asctime=time, source=source, level="EXCEPTION", name=name, message=message, exc=traceback.format_exc())
         print(record, end="")
-        if self._buffer:
+        if self._buffer is not None:
             self._buffer.append(record)
 
 
