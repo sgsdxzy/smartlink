@@ -12,6 +12,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 
 from google.protobuf.message import DecodeError
+from google.protobuf import json_format
 
 from smartlink import EndOfStreamError, ProtocalError, StreamReadWriter, link_pb2, varint
 from smartlink.widgets import UStrWidget, UFloatWidget, UBoolWidget, CStrWidget, CFloatWidget
@@ -459,17 +460,18 @@ class DevicePanel(QFrame):
         time = datetime.today().strftime(self._datefmt)
         stfile = os.path.join(
             pdir, "save", "{name} {time} status{ext}".format(name=self.fullname,
-                                                             time=time, ext='.txt'))
+                                                             time=time, ext='.json'))
         filenames = QFileDialog.getSaveFileName(self, 'Save status file',
-                                                stfile, 'Data file (*.txt);;Any file (*)',
+                                                stfile, 'Json file (*.json);;Any file (*)',
                                                 None, QFileDialog.DontUseNativeDialog)
         filename = filenames[0]
         if filename:
             status_link = self._get_status_link()
             if status_link is not None:
+                json_link = json_format.MessageToJson(status_link)
                 try:
                     with open(filename, mode='w', encoding='utf-8') as f:
-                        f.write(str(status_link))
+                        f.write(json_link)
                 except OSError:
                     self.logger.exception(
                         self.fullname, "Failed to create file: {filename}".format(filename=filename))
@@ -495,20 +497,18 @@ class DevicePanel(QFrame):
         time = datetime.today().strftime(self._datefmt)
         stfile = os.path.join(
             pdir, "save", "{name} {time} commands{ext}".format(name=self.fullname,
-                                                               time=time, ext='.txt'))
+                                                               time=time, ext='.json'))
         filenames = QFileDialog.getSaveFileName(self, 'Save command file',
-                                                stfile, 'Data file (*.txt);;Any file (*)',
+                                                stfile, 'Json file (*.json);;Any file (*)',
                                                 None, QFileDialog.DontUseNativeDialog)
         filename = filenames[0]
         if filename:
             cmd_link = self._get_full_cmd_link()
             if cmd_link is not None:
-                bin_link = cmd_link.SerializeToString()
+                json_link = json_format.MessageToJson(cmd_link)
                 try:
                     with open(filename, mode='w', encoding='utf-8') as f:
-                        f.write(base64.b64encode(bin_link).decode('ascii'))
-                        f.write('\n\n')
-                        f.write(str(cmd_link))
+                        f.write(json_link)
                 except OSError:
                     self.logger.exception(
                         self.fullname, "Failed to create file: {filename}".format(filename=filename))
@@ -535,20 +535,20 @@ class DevicePanel(QFrame):
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
         savedir = os.path.join(pdir, "save")
         filenames = QFileDialog.getOpenFileName(self, 'Open command file',
-                                                savedir, 'Data file (*.txt);;Any file (*)', None, QFileDialog.DontUseNativeDialog)
+                                                savedir, 'Json file (*.json);;Any file (*)', None, QFileDialog.DontUseNativeDialog)
         filename = filenames[0]
         if filename:
             try:
                 with open(filename, mode='r', encoding='utf-8') as f:
-                    b64_bin = f.readline()[:-1]
+                    json_link = f.read()
             except OSError:
                 self.logger.exception(
                     self.fullname, "Failed to open file: {filename}".format(filename=filename))
                 return
             try:
-                bin_link = base64.decodebytes(b64_bin.encode('ascii'))
-                cmd_link = link_pb2.DeviceLink.FromString(bin_link)
-            except DecodeError:
+                cmd_link = link_pb2.DeviceLink()
+                json_format.Parse(json_link, cmd_link, True)
+            except json_format.ParseError:
                 self.logger.error(
                     self.fullname, "Failed to decode commands from file: {filename}".format(filename=filename))
                 return
@@ -637,8 +637,8 @@ class NodePanel(QFrame):
     _title_font.setWeight(QFont.Black)
     _title_font.setPointSize(18)
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self._connected = False
         self._host_ip = None
         self._readwriter = None
@@ -834,5 +834,14 @@ class NodePanel(QFrame):
             bin_link = node_link.SerializeToString()
             self._readwriter.write_bin_link(bin_link)
 
+    def get_title(self):
+        return self._title.text()
+
     def set_title(self, name):
         self._title.setText(name)
+
+    def get_ip(self):
+        return self._host_edit.text()
+
+    def set_ip(self, ip):
+        self._host_edit.setText(ip)
