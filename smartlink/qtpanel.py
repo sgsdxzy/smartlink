@@ -62,7 +62,7 @@ class Logger(QTextEdit):
 
     def _notify_btn(self):
         if self._btn:
-            if not self._btn.isVisible():
+            if not self.isVisible():
                 self._btn.setText("(New) Log")
 
 class CommandWidget(QFrame):
@@ -644,7 +644,6 @@ class NodePanel(QFrame):
         self._readwriter = None
         self._desc_link = None
         self._devices = {}
-        self.logger = Logger()
         self.fullname = ""
         self._peaceful_disconnect = False
         self._initUI()
@@ -676,6 +675,7 @@ class NodePanel(QFrame):
         self._reconnect_btn = QPushButton("Reconnect")
         self._disconnect_btn = QPushButton("Disconnect")
         self._log_btn = QPushButton("Log")
+        self.logger = Logger(self._log_btn)
         self._close_btn = QPushButton("X")
         self._close_btn.setFixedSize(24, 24)
         self._outer_layout.addWidget(self._connect_btn, 1, 0,)
@@ -826,6 +826,7 @@ class NodePanel(QFrame):
             self._status_bar.showMessage(
                 "Please disconnect before closing panel.")
         else:
+            self.logger.deleteLater()
             self.deleteLater()
 
     def send_command(self, node_link):
