@@ -1,6 +1,5 @@
 import os
 import sys
-import base64
 import asyncio
 from asyncio import ensure_future
 import traceback
@@ -57,7 +56,6 @@ class Logger(QTextEdit):
 
     def remote(self, record):
         """Show log record received from nodeserver"""
-        record = "[NODE:" + record[1:]
         self.insertPlainText(record)
         self._notify_btn()
 

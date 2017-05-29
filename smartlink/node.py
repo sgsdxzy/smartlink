@@ -11,7 +11,7 @@ class Logger:
     """A non-persistent object-level logger"""
     __slots__ = ["_datefmt", "_fmt", "_filename", "_file", "_buffer"]
     datefmt = '%Y-%m-%d %H:%M:%S'
-    fmt = "[{level}]\t{asctime}\t{name}:\t{message}\n{exc}"
+    fmt = "[{source}:{level}]\t{asctime}\t{name}:\t{message}\n{exc}"
 
     def __init__(self, datefmt=None, fmt=None, filename=None, logbuffer=None):
         self._datefmt = datefmt or Logger.datefmt
@@ -34,29 +34,29 @@ class Logger:
             self._file.close()
             self._file = None
 
-    def info(self, name, message):
+    def info(self, name, message, source="NODE"):
         """Print the message and log it to file"""
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
-            asctime=time, level="INFO", name=name, message=message, exc="")
+            asctime=time, source=source, level="INFO", name=name, message=message, exc="")
         print(record, end="")
         if self._file:
             self._file.write(record)
 
-    def error(self, name, message):
+    def error(self, name, message, source="NODE"):
         """Print the message, then append it to logbuffer"""
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
-            asctime=time, level="ERROR", name=name, message=message, exc="")
+            asctime=time, source=source, level="ERROR", name=name, message=message, exc="")
         print(record, end="")
         if self._buffer:
             self._buffer.append(record)
 
-    def exception(self, name, message):
+    def exception(self, name, message, source="NODE"):
         """Print the message and traceback, then append them to logbuffer"""
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
-            asctime=time, level="EXCEPTION", name=name, message=message, exc=traceback.format_exc())
+            asctime=time, source=source, level="EXCEPTION", name=name, message=message, exc=traceback.format_exc())
         print(record, end="")
         if self._buffer:
             self._buffer.append(record)
