@@ -22,6 +22,8 @@ class DG645:
 
         # DG645 states
         self._delays = {}
+        for i in range(10):
+            self._delays[i] = ['0', '0']
         self._prescale = '1'
         self._advt = '0'
 

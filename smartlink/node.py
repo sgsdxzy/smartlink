@@ -49,7 +49,7 @@ class Logger:
         record = self._fmt.format(
             asctime=time, source=source, level="ERROR", name=name, message=message, exc="")
         print(record, end="")
-        if self._buffer:
+        if self._buffer is not None:
             self._buffer.append(record)
 
     def exception(self, name, message, source="NODE"):

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 sthandler = logging.StreamHandler()
 fmt = logging.Formatter(datefmt='%Y-%m-%d %H:%M:%S',
-                        fmt="[SERVER]\t[{levelname}]\t{asctime}\t{message}", style='{')
+                        fmt="[SERVER:{levelname}]\t{asctime}\t{message}", style='{')
 sthandler.setFormatter(fmt)
 logger.addHandler(sthandler)
 
