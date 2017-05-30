@@ -95,7 +95,7 @@ class Command:
         """Call the associated func and return the result."""
         try:
             result = self._func(*link.args)
-            self.logger.info(self.fullname, "Executed with arguments: {args}".format(
+            self.logger.info(self.fullname, "Executing with arguments: {args}".format(
                 args=' '.join(link.args)))
             return result
         except Exception:

@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, QEvent, QTimer
 # from PyQt5.QtGui import
 from PyQt5.QtWidgets import (QTabBar, QTabWidget, QApplication, QLineEdit,
                              QWidget, QStyleFactory, QHBoxLayout, QVBoxLayout, QMainWindow, QPushButton,
-                             QFrame, QAction, QFileDialog)
+                             QFrame, QAction, QFileDialog, QScrollArea)
 
 from google.protobuf import json_format
 
@@ -157,7 +157,10 @@ class EditableTabWidget(QTabWidget):
     def _add_tab(self, index):
         if index == self.count() - 1:
             '''last tab was clicked. add tab'''
-            self.insertTab(index, DoubleColumnPanel(self),
+            scroll = QScrollArea(self)
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(DoubleColumnPanel())
+            self.insertTab(index, scroll,
                            "New Tab {0}".format(index + 1))
             self.setCurrentIndex(index)
 
@@ -165,7 +168,10 @@ class EditableTabWidget(QTabWidget):
         """Enable the '+' button in tabs to create new tabs. This should be
         called after all other initialization has completed."""
         if self.count() == 1:
-            self.insertTab(0, DoubleColumnPanel(self), "New Tab 1")
+            scroll = QScrollArea(self)
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(DoubleColumnPanel())
+            self.insertTab(0, scroll, "New Tab 1")
             self.setCurrentIndex(0)
         self.currentChanged.connect(self._add_tab)
 
@@ -174,7 +180,7 @@ class EditableTabWidget(QTabWidget):
         tabs = OrderedDict()
         for i in range(self.count() - 1):
             tab_title = self.tabBar().tabText(i)
-            dpanel = self.widget(i)
+            dpanel = self.widget(i).widget()
             tabs[tab_title] = dpanel.get_config()
         return tabs
 
@@ -187,8 +193,11 @@ class EditableTabWidget(QTabWidget):
 
         index = 0
         for tab_title, dpanel_config in config.items():
-            dpanel = DoubleColumnPanel(self)
-            self.insertTab(index, dpanel, tab_title)
+            scroll = QScrollArea(self)
+            scroll.setWidgetResizable(True)
+            dpanel = DoubleColumnPanel()
+            scroll.setWidget(dpanel)
+            self.insertTab(index, scroll, tab_title)
             index += 0
             dpanel.restore_config(dpanel_config)
 
@@ -198,7 +207,7 @@ class EditableTabWidget(QTabWidget):
         """Get all status in all NodePanels and append them to a list."""
         status_links = []
         for i in range(self.count() - 1):
-            links = self.widget(i).get_status_links()
+            links = self.widget(i).widget().get_status_links()
             status_links.extend(links)
         return status_links
 
