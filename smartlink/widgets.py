@@ -16,13 +16,13 @@ class StrWidget(QLineEdit):
         super().__init__()
         self.setMinimumWidth(40)
         if ext_arg is not None:
-            self.setText(str(ext_arg))
+            self.setText(ext_arg)
 
     def get_arg(self):
         return self.text()
 
     def set_arg(self, arg):
-        self.setText(str(arg))
+        self.setText(arg)
 
 
 class UStrWidget(StrWidget):
@@ -67,7 +67,7 @@ class UIntWidget(UStrWidget):
         self.setValidator(self.validator)
 
 
-class CIntWidget(UStrWidget):
+class CIntWidget(CStrWidget):
     """Widget for handling "int" type signature of command."""
 
     def __init__(self, ext_arg=None):
@@ -81,8 +81,6 @@ class UBoolWidget(QPushButton):
     _StyleTrue = "QPushButton { color: #000000; background-color : #00FF00}"
     _StyleFalse = "QPushButton { color: #FFFFFF; background-color : #FF0000}"
     _StyleUnknown = "QPushButton { color: #FFFFFF; background-color : #808080}"
-    _True_input = ("1", "T", "True", "Y", "t", "true")
-    _False_input = ("0", "F", "False", "N", "f", "false")
 
     def __init__(self, ext_arg=None):
         super().__init__("UKN")
@@ -90,11 +88,11 @@ class UBoolWidget(QPushButton):
         self.setMaximumWidth(32)
 
     def set_arg(self, arg):
-        if arg in self._True_input:
+        if arg == '1':
             self.setStyleSheet(self._StyleTrue)
             self.setText("ON")
             self.setChecked(True)
-        elif arg in self._False_input:
+        elif arg == '0':
             self.setStyleSheet(self._StyleFalse)
             self.setText("OFF")
             self.setChecked(False)

@@ -49,5 +49,28 @@ class StreamReadWriter:
         self._writer.close()
 
 
-def isNoneStringSequence(obj):
-    return isinstance(obj, Sequence) and not isinstance(obj, str)
+def args_to_sequence(args):
+    """Convert args to a sequence suitable for sending using smarlink."""
+    if args is None:
+        yield ''
+        return
+    if isinstance(args, str) or isinstance(args, bytes):
+        yield args
+        return
+    if isinstance(args, bytearray):
+        yield bytes(args)
+        return
+    if isinstance(args, Sequence):
+        for arg in args:
+            if arg is None:
+                yield ''
+            elif isinstance(arg, bytearray):
+                yield bytes(arg)
+            elif arg == True:
+                yield '1'
+            elif arg == False:
+                yield '0'
+            else:
+                yield str(arg)
+        return
+    yield str(args)

@@ -5,7 +5,7 @@ import traceback
 import asyncio
 from datetime import date, datetime
 
-from smartlink import link_pb2, isNoneStringSequence
+from smartlink import link_pb2, args_to_sequence
 
 
 class Logger:
@@ -77,23 +77,13 @@ class Command:
             self.fullname = '.'.join((dev.fullname, grp, name))
         else:
             self.fullname = '.'.join((dev.fullname, name))
-        if not sigs:
-            self._sigs = None
-        elif isNoneStringSequence(sigs):
-            self._sigs = sigs
-        else:
-            self._sigs = (sigs, )
+        self._sigs = args_to_sequence(sigs)
         self._func = func
         if asyncio.iscoroutinefunction(func):
             self._is_coro = True
         else:
             self._is_coro = False
-        if not ext_args:
-            self._ext_args = None
-        elif isNoneStringSequence(ext_args):
-            self._ext_args = ext_args
-        else:
-            self._ext_args = (ext_args, )
+        self._ext_args = args_to_sequence(ext_args)
         self.logger = dev.logger
 
     def execute(self, link):
@@ -119,10 +109,8 @@ class Command:
         link.id = self.id
         link.name = self.name
         link.group = self._grp
-        if self._sigs:
-            link.sigs.extend(self._sigs)
-        if self._ext_args:
-            link.args.extend(self._ext_args)
+        link.sigs.extend(self._sigs)
+        link.args.extend(self._ext_args)
         return link
 
 
@@ -142,19 +130,9 @@ class Update:
             self.fullname = '.'.join((dev.fullname, grp, name))
         else:
             self.fullname = '.'.join((dev.fullname, name))
-        if not sigs:
-            self._sigs = None
-        elif isNoneStringSequence(sigs):
-            self._sigs = sigs
-        else:
-            self._sigs = (sigs, )
+        self._sigs = args_to_sequence(sigs)
         self._func = func
-        if not ext_args:
-            self._ext_args = None
-        elif isNoneStringSequence(ext_args):
-            self._ext_args = ext_args
-        else:
-            self._ext_args = (ext_args, )
+        self._ext_args = args_to_sequence(ext_args)
         self.logger = dev.logger
         self._old = None
 
@@ -173,11 +151,7 @@ class Update:
                     self._old = new
                     link = dev_link.links.add()
                     link.id = self.id
-                    if isNoneStringSequence(new):
-                        # func() returns multiple results
-                        link.args.extend(str(result) for result in new)
-                    else:
-                        link.args.append(str(new))
+                    link.args.extend(args_to_sequence(new))
                     return link
             except Exception:
                 self.logger.exception(self.fullname, "Failed to update.")
@@ -188,37 +162,27 @@ class Update:
 
         Returns: the created link_pb2.Link
         """
-        if self._sigs:
-            try:
-                new = self._func()
-                link = dev_link.links.add()
-                link.id = self.id
-                if isNoneStringSequence(new):
-                    # func() returns multiple results
-                    link.args.extend(str(result) for result in new)
-                else:
-                    link.args.append(str(new))
-                return link
-            except Exception:
-                self.logger.exception(self.fullname, "Failed to update.")
+        try:
+            new = self._func()
+            link = dev_link.links.add()
+            link.id = self.id
+            link.args.extend(args_to_sequence(new))
+            return link
+        except Exception:
+            self.logger.exception(self.fullname, "Failed to update.")
 
     def get_desc(self, dev_link):
         """Generate a description link to describe this Update, then append it to dev_link.
 
         Returns: the created link_pb2.Link or None is signature is empty
         """
-        if self._sigs:
-            link = dev_link.links.add()
-            link.type = link_pb2.Link.UPDATE
-            link.id = self.id
-            link.name = self.name
-            link.group = self._grp
-            link.sigs.extend(self._sigs)
-            if self._ext_args:
-                link.args.extend(self._ext_args)
-            return link
-        else:
-            return None
+        link = dev_link.links.add()
+        link.type = link_pb2.Link.UPDATE
+        link.id = self.id
+        link.name = self.name
+        link.group = self._grp
+        link.sigs.extend(self._sigs)
+        link.args.extend(self._ext_args)
 
 
 class Device:

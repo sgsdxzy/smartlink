@@ -151,7 +151,7 @@ class CommandWidget(QFrame):
 
         Returns: the created link_pb2.Link or None if invalid
         """
-        cmds = tuple(str(widget.get_arg()) for widget in self._widget_list)
+        cmds = tuple(widget.get_arg() for widget in self._widget_list)
         if not (cmds and all(cmds)):
             return None
         else:
@@ -167,7 +167,7 @@ class CommandWidget(QFrame):
 
         Returns: the created link_pb2.Link or None if invalid
         """
-        cmds = tuple(str(widget.get_arg()) for widget in self._widget_list)
+        cmds = tuple(widget.get_arg() for widget in self._widget_list)
         if not (cmds and all(cmds)):
             return None
         else:
@@ -189,12 +189,15 @@ class CommandWidget(QFrame):
             # Same signature is garanteed so unnecessary to check for index
             # here
             for i, arg in enumerate(link.args):
-                self._widget_list[i].set_arg(arg)
+                try:
+                    self._widget_list[i].set_arg(arg)
+                except Exception:
+                    pass    # Too small an error to be logged
 
     @pyqtSlot()
     def _send_command(self):
         """Send command to nodeserver."""
-        cmds = tuple(str(widget.get_arg()) for widget in self._widget_list)
+        cmds = tuple(widget.get_arg() for widget in self._widget_list)
         if not all(cmds):
             self.setStyleSheet(self._StyleError)
             QTimer.singleShot(1000, self._light_flash)
@@ -305,7 +308,7 @@ class UpdateWidget(QFrame):
         link.name = self.name
         link.group = self.grp
         link.sigs.extend(self._desc_link.sigs)
-        link.args.extend(str(widget.get_arg()) for widget in self._widget_list)
+        link.args.extend(widget.get_arg() for widget in self._widget_list)
         return link
 
 
