@@ -5,8 +5,10 @@ from asyncio import ensure_future, wait_for
 import serial
 from serial_asyncio import create_serial_connection, open_serial_connection
 
+
 class SC300Protocal(asyncio.Protocol):
     """Asyncio protocal for serial communicaton with SC300."""
+
     def __init__(self, dev):
         super().__init__()
         self._transport = None
@@ -26,11 +28,12 @@ class SC300Protocal(asyncio.Protocol):
                 self._buffer = self._buffer[start:]
                 return
             self._dev.handle_response(self._buffer[start:end])
-            start = end+1
+            start = end + 1
 
     def connection_lost(self, exc):
         self.logger.error("SC300", "Connection to SC300 is lost.")
         self._dev.close()
+
 
 class SC300:
     """Smartlink device for Zolix SC300 controller."""
@@ -75,13 +78,14 @@ class SC300:
         protocal = SC300Protocal(self)
         try:
             self._transport, self._protocal = await wait_for(
-                create_serial_connection(self._loop, lambda: protocal, port=port, baudrate=baudrate, bytesize=bytesize,
-                    parity=parity, stopbits=stopbits), timeout=self._timeout)
+                create_serial_connection(self._loop, lambda: protocal, port, baudrate=baudrate, bytesize=bytesize,
+                                         parity=parity, stopbits=stopbits), timeout=self._timeout)
         except asyncio.TimeoutError:
             self.logger.error("SC300", "Connection timeout.")
             return
         except (OSError, serial.SerialException):
-            self.logger.error("SC300", "Failed to open port {port}".format(port=port))
+            self.logger.error(
+                "SC300", "Failed to open port {port}".format(port=port))
             return
         self._connected = True
         # Identify SC300
@@ -128,17 +132,19 @@ class SC300:
             elif axis == self.Z:
                 self._z = int(pos)
             else:
-                self.logger.error("SC300", "Unrecognized response: {0}".format(res.decode()))
+                self.logger.error(
+                    "SC300", "Unrecognized response: {0}".format(res.decode()))
             self._moving = '0'
         except (ValueError, IndexError):
-            self.logger.error("SC300", "Unrecognized response: {0}".format(res.decode()))
+            self.logger.error(
+                "SC300", "Unrecognized response: {0}".format(res.decode()))
 
     def zero(self, axis):
-        self._write(b'H'+axis)
+        self._write(b'H' + axis)
         self._moving = '1'
 
     def relative_move(self, axis, n):
-        if n>0:
+        if n > 0:
             self._write(b''.join((b'+', axis, b',', str(n).encode())))
         else:
             self._write(b''.join((b'-', axis, b',', str(-n).encode())))
@@ -146,4 +152,4 @@ class SC300:
 
     def open(self):
         if y_pos < 100000:
-            self.relative_move(self.Y, 120000-y_pos)
+            self.relative_move(self.Y, 120000 - y_pos)

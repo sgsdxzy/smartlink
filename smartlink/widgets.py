@@ -162,6 +162,7 @@ class UEnumWidget(UStrWidget):
     def get_arg(self):
         return self.text()
 
+
 class CEnumWidget(QComboBox):
     """Widget for handling "enum" type argument of commands."""
 

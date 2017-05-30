@@ -40,14 +40,15 @@ def main():
     std = node.create_device("Stand")
     std.add_update("Position", "float", lambda: get_position(0), grp="X")
     std.add_update("Initialized", "bool", lambda: is_inited(0), grp="X")
-    std.add_command("Absolute", "float", lambda args: set_position(0, args), grp="X")
+    std.add_command("Absolute", "float",
+                    lambda args: set_position(0, args), grp="X")
     std.add_command("Initialize", "", lambda: init(0), grp="X")
 
     std.add_update("Position", "float", lambda: get_position(1), grp="Y")
     std.add_update("Initialized", "bool", lambda: is_inited(1), grp="Y")
-    std.add_command("Absolute", "float", lambda args: set_position(1, args), grp="Y")
+    std.add_command("Absolute", "float",
+                    lambda args: set_position(1, args), grp="Y")
     std.add_command("Initialize", "", lambda: init(1), grp="Y")
-
 
     loop = asyncio.get_event_loop()
     server = NodeServer(node, interval=0.2, loop=loop)

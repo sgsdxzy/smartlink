@@ -6,7 +6,7 @@ import traceback
 from datetime import datetime
 
 from PyQt5.QtWidgets import (QLineEdit, QTextEdit, QPushButton, QFrame,
-    QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QStatusBar, QFileDialog)
+                             QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QStatusBar, QFileDialog)
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 
@@ -15,7 +15,7 @@ from google.protobuf import json_format
 
 from smartlink import EndOfStreamError, ProtocalError, StreamReadWriter, link_pb2, varint
 from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget,
-    UEnumWidget, CStrWidget, CFloatWidget, CIntWidget, CBoolWidget, CEnumWidget)
+                               UEnumWidget, CStrWidget, CFloatWidget, CIntWidget, CBoolWidget, CEnumWidget)
 
 
 class Logger(QTextEdit):
@@ -71,9 +71,9 @@ class CommandWidget(QFrame):
     _widget_dict = {
         "str": CStrWidget,
         "float": CFloatWidget,
-        "int" : CIntWidget,
-        "bool" : CBoolWidget,
-        "enum" : CEnumWidget,
+        "int": CIntWidget,
+        "bool": CBoolWidget,
+        "enum": CEnumWidget,
     }
     _StyleNormal = "CommandWidget { border: 1px solid #CCCCCC; }"
     _StyleError = "CommandWidget { border: 1px solid #FF0000; }"
@@ -214,9 +214,9 @@ class UpdateWidget(QFrame):
     _widget_dict = {
         "str": UStrWidget,
         "float": UFloatWidget,
-        "int" : UIntWidget,
+        "int": UIntWidget,
         "bool": UBoolWidget,
-        "enum" : UEnumWidget,
+        "enum": UEnumWidget,
     }
     _StyleNormal = "UpdateWidget { border: 1px solid #CCCCCC; }"
     _StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
@@ -444,7 +444,7 @@ class DevicePanel(QFrame):
         empty_groups = []
         for grp, grp_panel in self._groups.items():
             if not grp_panel.finish_adding():
-                #empty group, delete this panel
+                # empty group, delete this panel
                 empty_groups.append(grp)
                 grp_panel.deleteLater()
         for grp in empty_groups:

@@ -136,6 +136,7 @@ class DoubleColumnPanel(QWidget):
                 status_links.append(link)
         return status_links
 
+
 class EditableTabWidget(QTabWidget):
     """A QTabWidget with editable tab names."""
 
@@ -215,6 +216,7 @@ class EditableTabWidget(QTabWidget):
 class ControlPanel(QMainWindow):
     """The QApplication main window for Qt smartlink control."""
     datefmt = '%Y-%m-%d %H:%M:%S'
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
@@ -234,7 +236,6 @@ class ControlPanel(QMainWindow):
         self._save_status_action.setStatusTip('Save status file')
         self._save_status_action.triggered.connect(self._save_all_status)
         self.addAction(self._save_status_action)
-
 
     def _save_config(self):
         config = self.centralWidget().get_config()

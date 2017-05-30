@@ -88,14 +88,15 @@ class NodeServer:
             while len(data) < 3:
                 data += await client.read(3 - len(data))
             if data != b'RDY':
-            # Not recognized respond
+                # Not recognized respond
                 logger.error(
                     "Response from client {ip} not recognized.".format(ip=client.peername))
                 client.close()
                 return
 
             self._clients.append(client)
-            logger.info("Client from {ip} is ready.".format(ip=client.peername))
+            logger.info("Client from {ip} is ready.".format(
+                ip=client.peername))
 
             # Send a full link
             full_link = self._node.get_full_update_link()
