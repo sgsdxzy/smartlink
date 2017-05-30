@@ -1,7 +1,7 @@
 from distutils.core import setup, Extension
 
 setup (name = 'smartlink',
-    version='0.82',
+    version='0.83',
     description='Smartlink protocal and implementation',
     author='Light',
     author_email='sgsdxzy@gmail.com',
