@@ -239,7 +239,7 @@ class ControlPanel(QMainWindow):
     def _save_config(self):
         config = self.centralWidget().get_config()
         try:
-            with open(self._config_file, 'w', encoding='ascii') as f:
+            with open(self._config_file, 'w', encoding="ascii") as f:
                 json.dump(config, f, indent=2)
         except OSError:
             self.statusBar().showMessage(
@@ -247,7 +247,7 @@ class ControlPanel(QMainWindow):
 
     def _load_config(self):
         try:
-            with open(self._config_file, 'r', encoding='ascii') as f:
+            with open(self._config_file, 'r', encoding="ascii") as f:
                 config = json.load(f, object_pairs_hook=OrderedDict)
             self.centralWidget().restore_config(config)
         except (OSError, json.JSONDecodeError):
@@ -272,7 +272,7 @@ class ControlPanel(QMainWindow):
             status_links = self.centralWidget().get_status_links()
             if status_links:
                 try:
-                    with open(filename, mode='w', encoding='ascii') as f:
+                    with open(filename, mode='w', encoding="ascii") as f:
                         for link in status_links:
                             f.write(json_format.MessageToJson(link))
                 except OSError:

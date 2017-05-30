@@ -2,6 +2,7 @@
 import os
 import sys
 import traceback
+import asyncio
 from datetime import date, datetime
 
 from smartlink import link_pb2, isNoneStringSequence
@@ -65,7 +66,7 @@ class Logger:
 class Command:
     """Command is the type of operation sent by control to be executed on node."""
     __slots__ = ["_dev", "id", "name", "_grp", "fullname",
-                 "_sigs", "_func", "_ext_args", "logger"]
+                 "_sigs", "_func", "_is_coro", "_ext_args", "logger"]
 
     def __init__(self, dev, id_, name, sigs, func, ext_args=None, grp=""):
         self._dev = dev
@@ -83,6 +84,10 @@ class Command:
         else:
             self._sigs = (sigs, )
         self._func = func
+        if asyncio.iscoroutinefunction(func):
+            self._is_coro = True
+        else:
+            self._is_coro = False
         if not ext_args:
             self._ext_args = None
         elif isNoneStringSequence(ext_args):
@@ -92,12 +97,14 @@ class Command:
         self.logger = dev.logger
 
     def execute(self, link):
-        """Call the associated func and return the result."""
+        """Call the associated func. If the func is a coroutine, it will be ensure_futured"""
         try:
-            result = self._func(*link.args)
+            if self._is_coro:
+                asyncio.ensure_future(self._func(*link.args))
+            else:
+                self._func(*link.args)
             self.logger.info(self.fullname, "Executing with arguments: {args}".format(
                 args=' '.join(link.args)))
-            return result
         except Exception:
             self.logger.exception(self.fullname, "Failed to execute with arguments: {args}".format(
                 args=' '.join(link.args)))
@@ -157,12 +164,33 @@ class Update:
 
         Returns: the created link_pb2.Link if has new result or None
         """
-        try:
-            new = self._func()
-            if new == self._old:
-                return None
-            else:
-                self._old = new
+        if self._sigs:
+            try:
+                new = self._func()
+                if new == self._old:
+                    return None
+                else:
+                    self._old = new
+                    link = dev_link.links.add()
+                    link.id = self.id
+                    if isNoneStringSequence(new):
+                        # func() returns multiple results
+                        link.args.extend(str(result) for result in new)
+                    else:
+                        link.args.append(str(new))
+                    return link
+            except Exception:
+                self.logger.exception(self.fullname, "Failed to update.")
+
+    def get_full_update(self, dev_link):
+        """Execute the associated func, wrap the result in a link_pb2.Link and
+        append it to dev_link.
+
+        Returns: the created link_pb2.Link
+        """
+        if self._sigs:
+            try:
+                new = self._func()
                 link = dev_link.links.add()
                 link.id = self.id
                 if isNoneStringSequence(new):
@@ -171,27 +199,8 @@ class Update:
                 else:
                     link.args.append(str(new))
                 return link
-        except Exception:
-            self.logger.exception(self.fullname, "Failed to update.")
-
-    def get_full_update(self, dev_link):
-        """Execute the associated func, wrap the result in a link_pb2.Link and
-        append it to dev_link.
-
-        Returns: the created link_pb2.Link
-        """
-        try:
-            new = self._func()
-            link = dev_link.links.add()
-            link.id = self.id
-            if isNoneStringSequence(new):
-                # func() returns multiple results
-                link.args.extend(str(result) for result in new)
-            else:
-                link.args.append(str(new))
-            return link
-        except Exception:
-            self.logger.exception(self.fullname, "Failed to update.")
+            except Exception:
+                self.logger.exception(self.fullname, "Failed to update.")
 
     def get_desc(self, dev_link):
         """Generate a description link to describe this Update, then append it to dev_link.

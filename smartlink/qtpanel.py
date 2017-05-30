@@ -761,7 +761,7 @@ class NodePanel(QFrame):
             msg = "Connected to {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
             self.logger.info("", msg, "PANEL")
-            self._readwriter.write("RDY".encode("ascii"))
+            self._readwriter.write("RDY".encode())
 
             # The work loop
             while True:

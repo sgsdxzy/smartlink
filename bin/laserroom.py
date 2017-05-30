@@ -7,12 +7,17 @@ import sys
 from pathlib import Path # if you haven't already done so
 root = str(Path(__file__).resolve().parents[1])
 sys.path.append(root)
+
 from devices.dg645 import DG645
+from devices.zolix import SC300
 
 def main():
     node = Node("Laser Room")
     dg645_sl = node.create_device("DG645")
     dg645_dev = DG645(dg645_sl)
+
+    sc300_sl = node.create_device("SC300")
+    sc300_dev = SC300(sc300_sl)
 
 
     loop = asyncio.get_event_loop()

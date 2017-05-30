@@ -18,7 +18,8 @@ class DG645:
         self._writer = None
         self._lock = asyncio.Lock()
         self._sep = b'\r'   # <CR>
-        self._wait_interval = 0.2   # Wait for this seconds after a set command to exectute get command
+        self._timeout = 5
+        self._wait_interval = 0.1   # Wait for this seconds after a set command to exectute get command
 
         # DG645 states
         self._delays = {}
@@ -41,9 +42,6 @@ class DG645:
             "5 Single shot;6 Line"))
         self._dev.add_command("Trigger", "", self.trigger)
 
-        self._dev.add_update("T0", ["enum", "float"], lambda: self._delays[0], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="T0")
-        self._dev.add_update("T1", ["enum", "float"], lambda: self._delays[1], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="T0")
-
         self._dev.add_update("A", ["enum", "float"], lambda: self._delays[2], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
         self._dev.add_update("B", ["enum", "float"], lambda: self._delays[3], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
         self._dev.add_command("A", ["enum", "float"], lambda d, t: self.set_delay('2', d, t),
@@ -61,9 +59,12 @@ class DG645:
         rtscts = True
         try:
             self._reader, self._writer = await wait_for(open_serial_connection(port=port, baudrate=baudrate, bytesize=bytesize,
-                                                      parity=parity, stopbits=stopbits, rtscts=rtscts), timeout=5)
+                                                      parity=parity, stopbits=stopbits, rtscts=rtscts), timeout=self._timeout)
         except asyncio.TimeoutError:
             self.logger.error("DG645", "Connection timeout.")
+            return
+        except (OSError, serial.SerialException):
+            self.logger.error("DG645", "Failed to open port {port}".format(port=port))
             return
         self._connected = True
         # Identify DG645
@@ -79,9 +80,9 @@ class DG645:
 
     async def _get_initial_update(self):
         # Initial state update
-        await self._get_advt()
-        await self._get_prescale_factor()
-        await self._get_delays()
+        await self.get_advt()
+        await self.get_prescale_factor()
+        await self.get_delays()
 
     def close(self):
         """Close serial port."""
@@ -113,7 +114,7 @@ class DG645:
             self._writer.write(cmd)
             self._writer.write(self._sep)
             try:
-                response = await wait_for(self._reader.read(), timeout=5)
+                response = await wait_for(self._reader.read(), timeout=self._timeout)
             except asyncio.TimeoutError:
                 self.logger.error("DG645", "Read timeout.")
                 self.close()
@@ -130,36 +131,25 @@ class DG645:
         command arms the DG645 to trigger on the next detected external trigger. """
         ensure_future(self._write(b"*TRG"))
 
-    def set_advt(self, i):
-        """Set the advanced triggering enable register. If i is '0', advanced
-        triggering is disabled. If i is '1' advanced triggering is enabled. """
-        ensure_future(self._set_get_advt(i))
-
-    def get_advt(self):
+    async def get_advt(self):
         """Query the advanced triggering enable register. If i is '0', advanced
         triggering is disabled. If i is '1' advanced triggering is enabled. """
-        ensure_future(self._get_advt())
-
-    async def _get_advt(self):
         self._advt = await self._write_and_read(b"ADVT?")
 
-    async def _set_get_advt(self, i):
-        await self._write(b"ADVT "+i.encode('ascii'))
+    async def set_advt(self, i):
+        """Set the advanced triggering enable register. If i is '0', advanced
+        triggering is disabled. If i is '1' advanced triggering is enabled. """
+        await self._write(b"ADVT "+i.encode())
         await asyncio.sleep(self._wait_interval)
         self._advt = await self._write_and_read(b"ADVT?")
 
-    def get_prescale_factor(self):
+    async def get_prescale_factor(self):
         """Query the prescale factor for Trigger input."""
-
-    async def _get_prescale_factor(self):
         self._prescale = await self._write_and_read(b'PRES?0')
 
-    def set_prescale_factor(self, i):
+    async def set_prescale_factor(self, i):
         """Set the prescale factor for Trigger input."""
-        ensure_future(self._set_get_prescale_factor(i))
-
-    async def _set_get_prescale_factor(self, i):
-        await self._write(b"PRES 0,"+i.encode('ascii'))
+        await self._write(b"PRES 0,"+i.encode())
         await asyncio.sleep(self._wait_interval)
         self._prescale = await self._write_and_read(b'PRES?0')
 
@@ -173,27 +163,27 @@ class DG645:
             5 Single shot
             6 Line
         """
-        ensure_future(self._write(b"TSRC "+i.encode('ascii')))
+        ensure_future(self._write(b"TSRC "+i.encode()))
 
-    def get_delays(self):
-        """Query the delay for all channels."""
-        ensure_future(self._get_delays())
-
-    async def _get_delays(self):
+    async def get_delays(self):
         """Query the delay for all channels."""
         for i in range(10):
-            res = await self._write_and_read(b"DLAY?"+str(i).encode('ascii'))
+            res = await self._write_and_read(b"DLAY?"+str(i).encode())
             self._delays[i] = res.split(b',')
 
     def set_delay(self, c, d, t):
         """Set the delay for channel c to t relative to channel d."""
-        ensure_future(self._set_get_delay(c, d, t))
+        ensure_future(self._set_delay(c, d, t))
 
-    async def _set_get_delay(self, c, d, t):
-        c = c.encode('ascii')
-        d = d.encode('ascii')
-        t = t.encode('ascii')
+    async def _set_delay(self, c, d, t):
+        """Set the delay for channel c to t relative to channel d."""
+        c = c.encode()
+        d = d.encode()
+        t = t.encode()
         await self._write(b"DLAY "+c+b','+d+b','+t)
         await asyncio.sleep(self._wait_interval)
         res = await self._write_and_read(b"DLAY?"+c)
-        self._delays[int(c)] = res.split(b',')
+        try:
+            self._delays[int(c)] = res.split(b',')
+        except (ValueError, IndexError):
+            self.logger.error("DG645", "Failed to parse delay settings from device.")

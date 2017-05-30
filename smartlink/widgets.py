@@ -153,7 +153,6 @@ class UEnumWidget(UStrWidget):
         self._items = ext_arg.split(';')
 
     def set_arg(self, arg):
-        print("get arg:"+arg)
         try:
             index = int(arg)
             self.setText(self._items[index])
