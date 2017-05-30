@@ -224,7 +224,6 @@ class ControlPanel(QMainWindow):
         self._initUI()
 
     def _initUI(self):
-        self.showMaximized()
         self.setWindowTitle("Smartlink Control Panel")
         self.setCentralWidget(EditableTabWidget(self))
         self._load_config()
@@ -287,7 +286,7 @@ def main():
     asyncio.set_event_loop(loop)
     app.setStyle(QStyleFactory.create("fusion"))
     panel = ControlPanel()
-    panel.show()
+    panel.showMaximized()
 
     with loop:
         loop.run_forever()

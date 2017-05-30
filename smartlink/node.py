@@ -77,13 +77,19 @@ class Command:
             self.fullname = '.'.join((dev.fullname, grp, name))
         else:
             self.fullname = '.'.join((dev.fullname, name))
-        self._sigs = args_to_sequence(sigs)
+        if sigs:
+            self._sigs = args_to_sequence(sigs)
+        else:
+            self._sigs = None
         self._func = func
         if asyncio.iscoroutinefunction(func):
             self._is_coro = True
         else:
             self._is_coro = False
-        self._ext_args = args_to_sequence(ext_args)
+        if ext_args:
+            self._ext_args = args_to_sequence(ext_args)
+        else:
+            self._ext_args = None
         self.logger = dev.logger
 
     def execute(self, link):
@@ -109,8 +115,10 @@ class Command:
         link.id = self.id
         link.name = self.name
         link.group = self._grp
-        link.sigs.extend(self._sigs)
-        link.args.extend(self._ext_args)
+        if self._sigs is not None:
+            link.sigs.extend(self._sigs)
+        if self._ext_args is not None:
+            link.args.extend(self._ext_args)
         return link
 
 
@@ -130,9 +138,15 @@ class Update:
             self.fullname = '.'.join((dev.fullname, grp, name))
         else:
             self.fullname = '.'.join((dev.fullname, name))
-        self._sigs = args_to_sequence(sigs)
+        if sigs:
+            self._sigs = args_to_sequence(sigs)
+        else:
+            self._sigs = None
         self._func = func
-        self._ext_args = args_to_sequence(ext_args)
+        if ext_args:
+            self._ext_args = args_to_sequence(ext_args)
+        else:
+            self._ext_args = None
         self.logger = dev.logger
         self._old = None
 
@@ -145,7 +159,7 @@ class Update:
         if self._sigs:
             try:
                 new = self._func()
-                if new == self._old:
+                if new == self._old or None:
                     return None
                 else:
                     self._old = new
@@ -181,8 +195,10 @@ class Update:
         link.id = self.id
         link.name = self.name
         link.group = self._grp
-        link.sigs.extend(self._sigs)
-        link.args.extend(self._ext_args)
+        if self._sigs is not None:
+            link.sigs.extend(self._sigs)
+        if self._ext_args is not None:
+            link.args.extend(self._ext_args)
 
 
 class Device:

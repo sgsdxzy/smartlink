@@ -25,9 +25,9 @@ class DG645:
         # DG645 states
         self._delays = {}
         for i in range(10):
-            self._delays[i] = ['0', '0']
-        self._prescale = '1'
-        self._advt = '0'
+            self._delays[i] = [b'0', b'0']
+        self._prescale = b'1'
+        self._advt = b'0'
 
         self._init_smartlink()
 
@@ -55,6 +55,9 @@ class DG645:
 
     async def open_port(self, port):
         """Open serial port `port`"""
+        if self._connected:
+            self.logger.error("DG645", "DG645 is already connected.")
+            return
         # Serial port characteristcs
         baudrate = 9600
         bytesize = serial.EIGHTBITS
@@ -63,7 +66,7 @@ class DG645:
         rtscts = True
         try:
             self._reader, self._writer = await wait_for(
-                open_serial_connection(port=port, baudrate=baudrate, bytesize=bytesize,
+                open_serial_connection(url=port, baudrate=baudrate, bytesize=bytesize,
                                        parity=parity, stopbits=stopbits, rtscts=rtscts), timeout=self._timeout)
         except asyncio.TimeoutError:
             self.logger.error("DG645", "Connection timeout.")
@@ -77,7 +80,7 @@ class DG645:
         res = await self._write_and_read(b"*IDN?")
         if res.find(b"DG645") == -1:
             self.logger.error("DG645", "Connected device is not DG645.")
-            self.close()
+            self.close_port()
             return
         # Reset defaults
         await self._write(b"*RST")
@@ -90,13 +93,15 @@ class DG645:
         await self.get_prescale_factor()
         await self.get_delays()
 
-    def close(self):
+    def close_port(self):
         """Close serial port."""
-        if self._connected:
-            self._writer.close()
-            self._reader = None
-            self._writer = None
-            self._connected = False
+        if not self._connected:
+            self.logger.error("DG645", "Not connected to DG645.")
+            return
+        self._writer.close()
+        self._reader = None
+        self._writer = None
+        self._connected = False
 
     def reset(self):
         """Reset DG645 to factory default settings."""
@@ -120,16 +125,16 @@ class DG645:
             self._writer.write(cmd)
             self._writer.write(self._sep)
             try:
-                response = await wait_for(self._reader.read(), timeout=self._timeout)
+                response = await wait_for(self._reader.readuntil(b"\r\n"), timeout=self._timeout)
             except asyncio.TimeoutError:
                 self.logger.error("DG645", "Read timeout.")
-                self.close()
+                self.close_port()
                 return b""
         if response == b"":
             # Connection is closed
             self.logger.error("DG645", "Connection to DG645 is lost.")
-            self.close()
-        return response
+            self.close_port()
+        return response[:-2]
 
     def trigger(self):
         """When the DG645 is configured for single shot triggers, this command initiates a
@@ -140,24 +145,24 @@ class DG645:
     async def get_advt(self):
         """Query the advanced triggering enable register. If i is '0', advanced
         triggering is disabled. If i is '1' advanced triggering is enabled. """
-        self._advt = await self._write_and_read(b"ADVT?")
+        self._advt = (await self._write_and_read(b"ADVT?"))
 
     async def set_advt(self, i):
         """Set the advanced triggering enable register. If i is '0', advanced
         triggering is disabled. If i is '1' advanced triggering is enabled. """
         await self._write(b"ADVT " + i.encode())
         await asyncio.sleep(self._wait_interval)
-        self._advt = await self._write_and_read(b"ADVT?")
+        await self.get_advt()
 
     async def get_prescale_factor(self):
         """Query the prescale factor for Trigger input."""
-        self._prescale = await self._write_and_read(b'PRES?0')
+        self._prescale = (await self._write_and_read(b'PRES?0'))
 
     async def set_prescale_factor(self, i):
         """Set the prescale factor for Trigger input."""
         await self._write(b"PRES 0," + i.encode())
         await asyncio.sleep(self._wait_interval)
-        self._prescale = await self._write_and_read(b'PRES?0')
+        await self.get_prescale_factor()
 
     def set_trigger_source(self, i):
         """Set the trigger source to i.
@@ -186,11 +191,15 @@ class DG645:
         c = c.encode()
         d = d.encode()
         t = t.encode()
-        await self._write(b"DLAY " + c + b',' + d + b',' + t)
+        await self._write(b'DLAY %c,%c,%s' % (c, d, t))
         await asyncio.sleep(self._wait_interval)
-        res = await self._write_and_read(b"DLAY?" + c)
+        res = await self._write_and_read(b"DLAY?%c" % c)
         try:
-            self._delays[int(c)] = res.split(b',')
+            ch, delay = res.split(b',')
+            if delay[0] == b'+':
+                self._delays[int(c)] = [ch, delay[1:]]
+            else:
+                self._delays[int(c)] = [ch, delay]
         except (ValueError, IndexError):
             self.logger.error(
                 "DG645", "Failed to parse delay settings from device.")

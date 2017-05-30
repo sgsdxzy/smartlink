@@ -51,9 +51,6 @@ class StreamReadWriter:
 
 def args_to_sequence(args):
     """Convert args to a sequence suitable for sending using smarlink."""
-    if args is None:
-        yield ''
-        return
     if isinstance(args, str) or isinstance(args, bytes):
         yield args
         return
@@ -64,6 +61,8 @@ def args_to_sequence(args):
         for arg in args:
             if arg is None:
                 yield ''
+            elif isinstance(arg, bytes):
+                yield arg
             elif isinstance(arg, bytearray):
                 yield bytes(arg)
             elif arg == True:
@@ -73,4 +72,9 @@ def args_to_sequence(args):
             else:
                 yield str(arg)
         return
-    yield str(args)
+    if args == True:
+        yield '1'
+    elif args == False:
+        yield '0'
+    else:
+        yield str(args)

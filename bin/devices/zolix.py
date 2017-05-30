@@ -20,7 +20,7 @@ class SC300Protocal(asyncio.Protocol):
         self._transport = transport
 
     def data_received(self, data):
-        self._buffer.append(data)
+        self._buffer.extend(data)
         start = 0
         while True:
             end = self._buffer.find(b'\r', start)
@@ -31,8 +31,10 @@ class SC300Protocal(asyncio.Protocol):
             start = end + 1
 
     def connection_lost(self, exc):
-        self.logger.error("SC300", "Connection to SC300 is lost.")
-        self._dev.close()
+        if not self._dev.peaceful_disconnect:
+            self.logger.error("SC300", "Connection to SC300 is lost.")
+        self._dev.close_port()
+        self.dev.peaceful_disconnect = True
 
 
 class SC300:
@@ -51,11 +53,12 @@ class SC300:
         self._protocal = None
         self._sep = b'\r'   # <CR>
         self._timeout = 5
+        self.peaceful_disconnect = False
 
         # SC300 status
         self._moving = '0'
         self._x = 0
-        self._y = 100
+        self._y = 0
         self._z = 0
 
         self._init_smartlink()
@@ -70,6 +73,9 @@ class SC300:
 
     async def open_port(self, port):
         """Open serial port `port`"""
+        if self._connected:
+            self.logger.error("SC300", "SC300 is already connected.")
+            return
         # Serial port characteristcs
         baudrate = 19200
         bytesize = serial.EIGHTBITS
@@ -88,23 +94,27 @@ class SC300:
                 "SC300", "Failed to open port {port}".format(port=port))
             return
         self._connected = True
+        self.peaceful_disconnect = False
         # Identify SC300
         self._verified = False
         self._write(b"VE")
 
-    def close(self):
+    def close_port(self):
         """Close serial port."""
-        if self._connected:
-            self._transport.close()
-            self._transport = None
-            self._protocal = None
-            self._connected = False
-            self._verified = False
+        if not self._connected:
+            self.logger.error("SC300", "Not connected to SC300.")
+            return
+        self.peaceful_disconnect = True
+        self._transport.close()
+        self._transport = None
+        self._protocal = None
+        self._connected = False
+        self._verified = False
 
     def _write(self, cmd):
         """Write cmd and sep to SC300."""
         if not self._connected:
-            self.logger.error("SC300", "Not connected to DGSC300.")
+            self.logger.error("SC300", "Not connected to SC300.")
             return
         self._transport.write(cmd)
         self._transport.write(self._sep)
@@ -114,10 +124,11 @@ class SC300:
         if not self._verified:
             if res.find(b"SC300") != -1:
                 self._verified = True
+                self._write(b"?Y")
                 return
             else:
                 self.logger.error("SC300", "Connected device is not SC300.")
-                self.close()
+                self.close_port()
                 return
         if res == b"ER":
             self.logger.error("SC300", "Error reported by device.")
@@ -125,11 +136,11 @@ class SC300:
         try:
             axis = res[1]
             pos = res[3:]
-            if axis == self.X:
+            if axis == self.X[0]:
                 self._x = int(pos)
-            elif axis == self.Y:
+            elif axis == self.Y[0]:
                 self._y = int(pos)
-            elif axis == self.Z:
+            elif axis == self.Z[0]:
                 self._z = int(pos)
             else:
                 self.logger.error(
@@ -151,5 +162,5 @@ class SC300:
         self._moving = '1'
 
     def open(self):
-        if y_pos < 100000:
-            self.relative_move(self.Y, 120000 - y_pos)
+        if self._y < 100000:
+            self.relative_move(self.Y, 120000 - self._y)
