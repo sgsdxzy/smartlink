@@ -65,6 +65,7 @@ class Logger(QTextEdit):
             if not self.isVisible():
                 self._btn.setText("(New) Log")
 
+
 class CommandWidget(QFrame):
     """A widget to handle user commands."""
     _widget_dict = {

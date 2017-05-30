@@ -165,7 +165,7 @@ class Update:
                 self._old = new
                 link = dev_link.links.add()
                 link.id = self.id
-                if isinstance(new, tuple):
+                if isNoneStringSequence(new):
                     # func() returns multiple results
                     link.args.extend(str(result) for result in new)
                 else:
@@ -184,7 +184,7 @@ class Update:
             new = self._func()
             link = dev_link.links.add()
             link.id = self.id
-            if isinstance(new, tuple):
+            if isNoneStringSequence(new):
                 # func() returns multiple results
                 link.args.extend(str(result) for result in new)
             else:
