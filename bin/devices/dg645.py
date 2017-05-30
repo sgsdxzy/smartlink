@@ -5,14 +5,13 @@ from asyncio import ensure_future, wait_for
 import serial
 from serial_asyncio import open_serial_connection
 
+from smartlink import node
 
-class DG645:
+class DG645(node.Device):
     """Smartlink device for DG645 Digital Delay Generator."""
 
-    def __init__(self, dev):
-        """dev is the smartlink device created by node.create_device()"""
-        self._dev = dev
-        self.logger = dev.logger
+    def __init__(self, name="DG645"):
+        super().__init__(name)
         self._connected = False
         self._reader = None
         self._writer = None
@@ -33,24 +32,24 @@ class DG645:
 
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
-        self._dev.add_update("Prescale Factor", "int", lambda: self._prescale)
-        self._dev.add_update("Advanced Triggering", "bool", lambda: self._advt)
-        self._dev.add_command("Set Prescale Factor",
+        self.add_update("Prescale Factor", "int", lambda: self._prescale)
+        self.add_update("Advanced Triggering", "bool", lambda: self._advt)
+        self.add_command("Set Prescale Factor",
                               "int", self.set_prescale_factor)
-        self._dev.add_command("Set Advanced Triggering", "bool", self.set_advt)
-        self._dev.add_command("Set Trigger Source", "enum", self.set_trigger_source,
+        self.add_command("Set Advanced Triggering", "bool", self.set_advt)
+        self.add_command("Set Trigger Source", "enum", self.set_trigger_source,
                               ("0 Internal;1 External rising edges;2 External falling edges;"
                                "3 Single shot external rising edges;4 Single shot external falling edges;"
                                "5 Single shot;6 Line"))
-        self._dev.add_command("Trigger", "", self.trigger)
+        self.add_command("Trigger", "", self.trigger)
 
-        self._dev.add_update("A", ["enum", "float"], lambda: self._delays[2], [
+        self.add_update("A", ["enum", "float"], lambda: self._delays[2], [
                              "T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
-        self._dev.add_update("B", ["enum", "float"], lambda: self._delays[3], [
+        self.add_update("B", ["enum", "float"], lambda: self._delays[3], [
                              "T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
-        self._dev.add_command("A", ["enum", "float"], lambda d, t: self.set_delay('2', d, t),
+        self.add_command("A", ["enum", "float"], lambda d, t: self.set_delay('2', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
-        self._dev.add_command("B", ["enum", "float"], lambda d, t: self.set_delay('3', d, t),
+        self.add_command("B", ["enum", "float"], lambda d, t: self.set_delay('3', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
 
     async def open_port(self, port):

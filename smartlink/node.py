@@ -73,10 +73,6 @@ class Command:
         self.id = id_
         self.name = name
         self._grp = grp
-        if grp:
-            self.fullname = '.'.join((dev.fullname, grp, name))
-        else:
-            self.fullname = '.'.join((dev.fullname, name))
         if sigs:
             self._sigs = args_to_sequence(sigs)
         else:
@@ -90,7 +86,15 @@ class Command:
             self._ext_args = args_to_sequence(ext_args)
         else:
             self._ext_args = None
-        self.logger = dev.logger
+        self.reinit()
+
+    def reinit(self):
+        """Call this method after device is added to another node."""
+        if self._grp:
+            self.fullname = '.'.join((self._dev.fullname, self._grp, self.name))
+        else:
+            self.fullname = '.'.join((self._dev.fullname, self.name))
+        self.logger = self._dev.logger
 
     def execute(self, link):
         """Call the associated func. If the func is a coroutine, it will be ensure_futured"""
@@ -134,10 +138,6 @@ class Update:
         self.id = id_
         self.name = name
         self._grp = grp
-        if grp:
-            self.fullname = '.'.join((dev.fullname, grp, name))
-        else:
-            self.fullname = '.'.join((dev.fullname, name))
         if sigs:
             self._sigs = args_to_sequence(sigs)
         else:
@@ -147,8 +147,17 @@ class Update:
             self._ext_args = args_to_sequence(ext_args)
         else:
             self._ext_args = None
-        self.logger = dev.logger
+        self.reinit()
+
         self._old = None
+
+    def reinit(self):
+        """Call this method after device is added to another node."""
+        if self._grp:
+            self.fullname = '.'.join((self._dev.fullname, self._grp, self.name))
+        else:
+            self.fullname = '.'.join((self._dev.fullname, self.name))
+        self.logger = self._dev.logger
 
     def get_update(self, dev_link):
         """Execute the associated func and if the result is different from old,
@@ -209,21 +218,32 @@ class Device:
     and logging.
     """
 
-    def __init__(self, node, id_, name):
-        self._node = node
-        self.id = id_
+    def __init__(self, name, node=None, id_=None):
         self.name = name
-        self.fullname = '.'.join((node.fullname, name))
+        self.id = id_
+        if node is None:
+            self._node = None
+            self.fullname = name
+            self.logger = None
+        else:
+            self._node = node
+            self.reinit()
+
         self._groups = [""]
         self._commands = []
         self._updates = []
-        self.logger = node.logger
+
+    def reinit(self):
+        """Call this method after this device is added to another node."""
+        self.fullname = '.'.join((self._node.fullname, self.name))
+        self.logger = self._node.logger
+        for cmd in self._commands:
+            cmd.reinit()
+        for update in self._updates:
+            update.reinit()
 
     def add_group(self, name):
-        """Create a new OperationGroup with name.
-
-        Returns: None
-        """
+        """Create a new OperationGroup with name."""
         self._groups.append(name)
 
     def add_command(self, name, sigs, func, ext_args=None, grp=""):
@@ -346,9 +366,17 @@ class Node:
         Returns: the created Device.
         """
         id_ = len(self._devices)
-        dev = Device(self, id_, name)
+        dev = Device(name, self, id_)
         self._devices.append(dev)
         return dev
+
+    def add_device(self, dev):
+        """Added device `dev` to this node."""
+        dev._node = self
+        id_ = len(self._devices)
+        dev.id = id_
+        dev.reinit()
+        self._devices.append(dev)
 
     def get_update_link(self):
         """Get updates from devices and wrap them in a NodeLink.

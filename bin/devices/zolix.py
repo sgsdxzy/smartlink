@@ -5,6 +5,8 @@ from asyncio import ensure_future, wait_for
 import serial
 from serial_asyncio import create_serial_connection, open_serial_connection
 
+from smartlink import node
+
 
 class SC300Protocal(asyncio.Protocol):
     """Asyncio protocal for serial communicaton with SC300."""
@@ -37,16 +39,15 @@ class SC300Protocal(asyncio.Protocol):
         self.dev.peaceful_disconnect = True
 
 
-class SC300:
+class SC300(node.Device):
     """Smartlink device for Zolix SC300 controller."""
     X = b'X'
     Y = b'Y'
     Z = b'Z'
 
-    def __init__(self, dev, loop=None):
+    def __init__(self, name="SC300", loop=None):
+        super().__init__(name)
         self._loop = loop or asyncio.get_event_loop()
-        self._dev = dev
-        self.logger = dev.logger
         self._connected = False
         self._verified = False
         self._transport = None
@@ -65,11 +66,11 @@ class SC300:
 
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
-        self._dev.add_update("Status", "bool", lambda: self._y > 100000)
-        self._dev.add_update("Moving", "bool", lambda: self._moving)
-        self._dev.add_update("Position", "int", lambda: self._y)
-        self._dev.add_command("Open", "", self.open)
-        self._dev.add_command("Close", "", lambda: self.zero(self.Y))
+        self.add_update("Status", "bool", lambda: self._y > 100000)
+        self.add_update("Moving", "bool", lambda: self._moving)
+        self.add_update("Position", "int", lambda: self._y)
+        self.add_command("Open", "", self.open)
+        self.add_command("Close", "", lambda: self.zero(self.Y))
 
     async def open_port(self, port):
         """Open serial port `port`"""

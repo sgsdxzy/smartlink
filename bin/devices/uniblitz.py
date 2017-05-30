@@ -2,13 +2,13 @@
 
 import serial
 
-class VMMD3:
+from smartlink import node
+
+class VMMD3(node.Device):
     """Smartlink device for Uniblitz VMM-D3 Shutter Driver."""
 
-    def __init__(self, dev):
-        """dev is the smartlink device created by node.create_device()"""
-        self._dev = dev
-        self.logger = dev.logger
+    def __init__(self, name="VMM-D3"):
+        super().__init__(name)
         self._connected = False
         self._ser = None
 
@@ -19,9 +19,9 @@ class VMMD3:
 
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
-        self._dev.add_update("Status", "bool", lambda: self._is_open)
-        self._dev.add_command("Open", "", self.open_shutter)
-        self._dev.add_command("Close", "", self.close_shutter)
+        self.add_update("Status", "bool", lambda: self._is_open)
+        self.add_command("Open", "", self.open_shutter)
+        self.add_command("Close", "", self.close_shutter)
 
     def open_port(self, port):
         if self._connected:

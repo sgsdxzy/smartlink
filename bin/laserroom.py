@@ -17,18 +17,17 @@ from devices.uniblitz import VMMD3
 def main():
     node = Node("Laser Room")
 
-    vmm_sl = node.create_device("VMM-D3")
-    vmm_dev = VMMD3(vmm_sl)
-    vmm_dev.open_port("COM1")
+    vmm = VMMD3()
+    sc300 = SC300()
+    dg645 = DG645()
 
-    sc300_sl = node.create_device("SC300")
-    sc300_dev = SC300(sc300_sl)
-    ensure_future(sc300_dev.open_port("COM3"))
+    node.add_device(vmm)
+    node.add_device(sc300)
+    node.add_device(dg645)
 
-    dg645_sl = node.create_device("DG645")
-    dg645_dev = DG645(dg645_sl)
-    ensure_future(dg645_dev.open_port('COM8'))
-
+    vmm.open_port("COM1")
+    ensure_future(sc300.open_port("COM3"))
+    ensure_future(dg645.open_port('COM8'))
 
 
     loop = asyncio.get_event_loop()
