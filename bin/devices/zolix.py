@@ -3,7 +3,7 @@
 import asyncio
 from asyncio import ensure_future, wait_for
 import serial
-from serial_asyncio import create_serial_connection, open_serial_connection
+from serial_asyncio import create_serial_connection
 
 from smartlink import node
 
@@ -36,7 +36,7 @@ class SC300Protocal(asyncio.Protocol):
         if not self._dev.peaceful_disconnect:
             self.logger.error("SC300", "Connection to SC300 is lost.")
         self._dev.close_port()
-        self.dev.peaceful_disconnect = True
+        self._dev.peaceful_disconnect = True
 
 
 class SC300(node.Device):

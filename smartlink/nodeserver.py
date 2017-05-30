@@ -30,7 +30,7 @@ class NodeServer:
             self._loop = loop
         self._node = node
         desc_link = node.get_desc_link()
-        print(desc_link)
+        #print(desc_link)
         self._str_desc = desc_link.SerializeToString()
         self._interval = interval
         self._clients = []
@@ -101,7 +101,7 @@ class NodeServer:
 
             # Send a full link
             full_link = self._node.get_full_update_link()
-            print(full_link)
+            #print(full_link)
             bin_link = full_link.SerializeToString()
             client.write_bin_link(bin_link)
 

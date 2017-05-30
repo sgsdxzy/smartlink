@@ -6,7 +6,8 @@ import traceback
 from datetime import datetime
 
 from PyQt5.QtWidgets import (QLineEdit, QTextEdit, QPushButton, QFrame,
-                             QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QStatusBar, QFileDialog)
+                             QHBoxLayout, QVBoxLayout, QGridLayout, QLabel,
+                             QBoxLayout, QStatusBar, QFileDialog)
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 
@@ -314,44 +315,76 @@ class UpdateWidget(QFrame):
 
 class GroupPanel(QFrame):
     """A subpanel to display a group of operations. maxlen is the
-    maximum number of basic QWidgets on a single line.
+    maximum number of basic QWidgets of the same type (command/update)
+    on a single line.
     """
     _title_font = QFont()
     _title_font.setWeight(QFont.Bold)
     _title_font.setPointSize(12)
 
-    def __init__(self, name="", maxlen=20):
+    def __init__(self, name="", maxlen=10):
         super().__init__()
-        self.name = name
         self._maxlen = maxlen
 
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self._outer_layout = QHBoxLayout()
-        self.setLayout(self._outer_layout)
+        self.setLayout(QHBoxLayout(self))
         if name != "":
-            self._label = QLabel(name)
-            self._label.setFont(self._title_font)
-            self._outer_layout.addWidget(self._label)
-        self._layout = QVBoxLayout()
-        self._outer_layout.addLayout(self._layout)
-        self._row_list = [QHBoxLayout()]
-        self._layout.addLayout(self._row_list[-1])
+            label = QLabel(name, self)
+            label.setFont(self._title_font)
+            self.layout().addWidget(label)
+
+        self._update_layout = QVBoxLayout()
+        self.layout().addLayout(self._update_layout)
+        self._update_row = QHBoxLayout()
+        self._update_layout.addLayout(self._update_row)
+
+        self._cmd_layout = QVBoxLayout()
+        self.layout().addLayout(self._cmd_layout)
+        self._cmd_row = QHBoxLayout()
+        self._cmd_row.setDirection(QBoxLayout.RightToLeft)
+        self._cmd_layout.addLayout(self._cmd_row)
 
         self._num_widgets = 0
-        self._col_index = 0
+        self._update_col_index = 0
+        self._cmd_col_index = 0
 
     def add_widget(self, widget):
         """Add widget to this group.
 
         Returns: None
         """
-        if self._col_index + widget.widget_length > self._maxlen:
-            self._row_list[-1].addStretch(1)
-            self._row_list.append(QHBoxLayout())
-            self._layout.addLayout(self.row_list[-1])
-            self._col_index = 0
-        self._row_list[-1].addWidget(widget)
-        self._col_index += widget.widget_length
+        if isinstance(widget, CommandWidget):
+            self.add_cmd_widget(widget)
+        elif isinstance(widget, UpdateWidget):
+            self.add_update_widget(widget)
+
+    def add_cmd_widget(self, widget):
+        """Add command widget to this group.
+
+        Returns: None
+        """
+        if self._cmd_col_index + widget.widget_length > self._maxlen:
+            self._cmd_row.addStretch(1)
+            self._cmd_row = QHBoxLayout()
+            self._cmd_row.setDirection(QBoxLayout.RightToLeft)
+            self._cmd_layout.addLayout(self._cmd_row)
+            self._cmd_col_index = 0
+        self._cmd_row.insertWidget(0, widget)
+        self._cmd_col_index += widget.widget_length
+        self._num_widgets += 1
+
+    def add_update_widget(self, widget):
+        """Add command widget to this group.
+
+        Returns: None
+        """
+        if self._update_col_index + widget.widget_length > self._maxlen:
+            self._update_row.addStretch(1)
+            self._update_row = QHBoxLayout()
+            self._update_layout.addLayout(self._update_row)
+            self._update_col_index = 0
+        self._update_row.addWidget(widget)
+        self._update_col_index += widget.widget_length
         self._num_widgets += 1
 
     def finish_adding(self):
@@ -363,9 +396,11 @@ class GroupPanel(QFrame):
         if self._num_widgets == 0:
             return False
         else:
-            self._row_list[-1].addStretch(1)
+            self._cmd_row.addStretch(1)
+            self._update_row.addStretch(1)
             del self._num_widgets
-            del self._col_index
+            del self._cmd_col_index
+            del self._update_col_index
             return True
 
 
@@ -653,8 +688,9 @@ class NodePanel(QFrame):
     _title_font.setWeight(QFont.Black)
     _title_font.setPointSize(18)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, loop=None):
         super().__init__(parent)
+        self._loop = loop or asyncio.get_event_loop()
         self._connected = False
         self._host_ip = None
         self._readwriter = None
@@ -823,7 +859,7 @@ class NodePanel(QFrame):
     @pyqtSlot()
     def _reconnect_btn_exec(self):
         self._disconnect_btn_exec()
-        self._connect_btn_exec()
+        self._loop.call_later(0.5, self._connect_btn_exec)
 
     @pyqtSlot()
     def _log_btn_exec(self):
