@@ -65,6 +65,7 @@ class NodeServer:
             while True:
                 if self._clients:
                     update_link = self._node.get_update_link()
+                    #print(update_link)
                     bin_link = update_link.SerializeToString()
                     if bin_link:
                         # Write only when there's news to write

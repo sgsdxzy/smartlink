@@ -467,14 +467,14 @@ class DevicePanel(QFrame):
                 if link.type == link_pb2.Link.COMMAND:
                     widget = CommandWidget(self, link)
                     self._commands[link.id] = widget
+                    self._groups[link.group].add_cmd_widget(widget)
                 else:  # link.type == link_pb2.Link.UPDATE:
                     widget = UpdateWidget(self, link)
                     self._updates[link.id] = widget
+                    self._groups[link.group].add_update_widget(widget)
             except RuntimeError:
                 # Widget creation failed, already logged
                 continue
-            try:
-                self._groups[link.group].add_widget(widget)
             except KeyError:
                 self.logger.error(
                     self.fullname, "Unknown group name: {name}".format(name=link.group))
@@ -603,9 +603,9 @@ class DevicePanel(QFrame):
                 self.logger.error(
                     self.fullname, "Failed to decode commands from file: {filename}".format(filename=filename))
                 return
-            self._set_cmd_from(cmd_link)
+            self.set_cmd_from(cmd_link)
 
-    def _set_cmd_from(self, dev_link):
+    def set_cmd_from(self, dev_link):
         """Restore commands from dev_link.
 
         Returns: None
@@ -671,6 +671,24 @@ class DevicePanel(QFrame):
         else:
             return dev_link
 
+    def get_full_cmd(self, node_link):
+        """Get commands from the list of Commands and wrap them in a DeviceLink,
+        then append it to node_link. This DeviceLink also contains additional
+        information such as the device's name. This is used for restoring commands.
+
+        Returns: the created link_pb2.DeviceLink or None if empty.
+        """
+        dev_link = node_link.dev_links.add()
+        dev_link.id = self.id_
+        dev_link.name = self.name
+        for cmd in self._commands.values():
+            cmd.get_full_cmd(dev_link)
+        if not dev_link.links:  # empty
+            del node_link.dev_links[-1]
+            return None
+        else:
+            return dev_link
+
     def send_command(self, node_link):
         """Send command node_link to nodeserver."""
         self._node_panel.send_command(node_link)
@@ -687,6 +705,7 @@ class NodePanel(QFrame):
     _title_font = QFont()
     _title_font.setWeight(QFont.Black)
     _title_font.setPointSize(18)
+    _datefmt = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, parent=None, loop=None):
         super().__init__(parent)
@@ -698,6 +717,7 @@ class NodePanel(QFrame):
         self._devices = {}
         self.fullname = ""
         self._peaceful_disconnect = False
+
         self._initUI()
 
     def _initUI(self):
@@ -722,25 +742,35 @@ class NodePanel(QFrame):
         self._title.setAlignment(Qt.AlignCenter)
         self._outer_layout.addWidget(self._title, 0, 2)
         self._status_bar = QStatusBar()
-        self._outer_layout.addWidget(self._status_bar, 6, 0, 1, 4)
+        self._outer_layout.addWidget(self._status_bar, 9, 0, 1, 4)
+
         self._connect_btn = QPushButton("Connect")
-        self._reconnect_btn = QPushButton("Reconnect")
         self._disconnect_btn = QPushButton("Disconnect")
+        self._save_status_btn = QPushButton("Save status")
+        self._save_cmd_btn = QPushButton("Save commands")
+        self._load_cmd_btn = QPushButton("Load commands")
+        self._apply_all_btn = QPushButton("Apply all")
         self._log_btn = QPushButton("Log")
         self.logger = Logger(self._log_btn)
         self._close_btn = QPushButton("X")
         self._close_btn.setFixedSize(24, 24)
-        self._outer_layout.addWidget(self._connect_btn, 1, 0,)
-        self._outer_layout.addWidget(self._reconnect_btn, 2, 0)
-        self._outer_layout.addWidget(self._disconnect_btn, 3, 0)
-        self._outer_layout.addWidget(self._log_btn, 5, 0)
+        self._outer_layout.addWidget(self._connect_btn, 1, 0)
+        self._outer_layout.addWidget(self._disconnect_btn, 2, 0)
+        self._outer_layout.addWidget(self._save_status_btn, 4, 0)
+        self._outer_layout.addWidget(self._save_cmd_btn, 5, 0)
+        self._outer_layout.addWidget(self._load_cmd_btn, 6, 0)
+        self._outer_layout.addWidget(self._apply_all_btn, 7, 0)
+        self._outer_layout.addWidget(self._log_btn, 8, 0)
         self._outer_layout.addWidget(self._close_btn, 0, 3, 1, 2)
         self._layout = QVBoxLayout()
-        self._outer_layout.addLayout(self._layout, 1, 1, 5, 3)
+        self._outer_layout.addLayout(self._layout, 1, 1, 8, 3)
 
         self._connect_btn.clicked.connect(self._connect_btn_exec)
         self._disconnect_btn.clicked.connect(self._disconnect_btn_exec)
-        self._reconnect_btn.clicked.connect(self._reconnect_btn_exec)
+        self._save_status_btn.clicked.connect(self._save_status)
+        self._save_cmd_btn.clicked.connect(self._save_cmd)
+        self._load_cmd_btn.clicked.connect(self._load_cmd)
+        self._apply_all_btn.clicked.connect(self._apply_all)
         self._log_btn.clicked.connect(self._log_btn_exec)
         self._close_btn.clicked.connect(self._close)
 
@@ -857,11 +887,6 @@ class NodePanel(QFrame):
             self._status_bar.showMessage(msg)
 
     @pyqtSlot()
-    def _reconnect_btn_exec(self):
-        self._disconnect_btn_exec()
-        self._loop.call_later(0.5, self._connect_btn_exec)
-
-    @pyqtSlot()
     def _log_btn_exec(self):
         if self.logger.isVisible():
             self.logger.hide()
@@ -901,6 +926,132 @@ class NodePanel(QFrame):
         if self._connected:
             bin_link = node_link.SerializeToString()
             self._readwriter.write_bin_link(bin_link)
+
+    @pyqtSlot()
+    def _save_status(self):
+        """Save all status in node to json file."""
+        pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
+        time = datetime.today().strftime(self._datefmt)
+        stfile = os.path.join(
+            pdir, "save", "{name} {time} status{ext}".format(name=self.fullname,
+                                                             time=time, ext='.json'))
+        filenames = QFileDialog.getSaveFileName(self, 'Save status file',
+                                                stfile, 'Json file (*.json);;Any file (*)',
+                                                None, QFileDialog.DontUseNativeDialog)
+        filename = filenames[0]
+        if filename:
+            status_link = self.get_status_link()
+            if status_link is not None:
+                json_link = json_format.MessageToJson(status_link)
+                try:
+                    with open(filename, mode='w', encoding='ascii') as f:
+                        f.write(json_link)
+                except OSError:
+                    self.logger.exception(
+                        self.fullname, "Failed to create file: {filename}".format(filename=filename))
+
+    @pyqtSlot()
+    def _save_cmd(self):
+        """Save all valid commands in node to json file."""
+        pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
+        time = datetime.today().strftime(self._datefmt)
+        stfile = os.path.join(
+            pdir, "save", "{name} {time} commands{ext}".format(name=self.fullname,
+                                                               time=time, ext='.json'))
+        filenames = QFileDialog.getSaveFileName(self, 'Save command file',
+                                                stfile, 'Json file (*.json);;Any file (*)',
+                                                None, QFileDialog.DontUseNativeDialog)
+        filename = filenames[0]
+        if filename:
+            cmd_link = self._get_full_cmd_link()
+            if cmd_link is not None:
+                json_link = json_format.MessageToJson(cmd_link)
+                try:
+                    with open(filename, mode='w', encoding='ascii') as f:
+                        f.write(json_link)
+                except OSError:
+                    self.logger.exception(
+                        self.fullname, "Failed to create file: {filename}".format(filename=filename))
+
+    def get_cmd_link(self):
+        """Get commands from the list of devices and wrap them in a NodeLink.
+
+        Returns: the created link_pb2.DeviceLink or None if empty.
+        """
+        node_link = link_pb2.NodeLink()
+        for dev in self._devices.values():
+            dev.get_cmd(node_link)
+        if not node_link.dev_links:  # empty
+            return None
+        else:
+            return node_link
+
+    def _get_full_cmd_link(self):
+        """Get commands from devices and wrap them in a NodeLink.
+        This NodeLink also contains additional information for
+        restoring commands.
+
+        Returns: the created link_pb2.NodeLink or None if empty.
+        """
+        node_link = link_pb2.NodeLink()
+        node_link.name = self.fullname
+        for dev in self._devices.values():
+            dev.get_full_cmd(node_link)
+        if not node_link.dev_links:  # empty
+            return None
+        else:
+            return node_link
+
+    @pyqtSlot()
+    def _load_cmd(self):
+        pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
+        savedir = os.path.join(pdir, "save")
+        filenames = QFileDialog.getOpenFileName(self, 'Open command file',
+                                                savedir, 'Json file (*.json);;Any file (*)', None, QFileDialog.DontUseNativeDialog)
+        filename = filenames[0]
+        if filename:
+            try:
+                with open(filename, mode='r', encoding='ascii') as f:
+                    json_link = f.read()
+            except OSError:
+                self.logger.exception(
+                    self.fullname, "Failed to open file: {filename}".format(filename=filename))
+                return
+            try:
+                cmd_link = link_pb2.NodeLink()
+                json_format.Parse(json_link, cmd_link, True)
+            except json_format.ParseError:
+                self.logger.error(
+                    self.fullname, "Failed to decode commands from file: {filename}".format(filename=filename))
+                return
+            self.set_cmd_from(cmd_link)
+
+    def set_cmd_from(self, node_link):
+        """Restore commands from node_link.
+
+        Returns: None
+        """
+        for dev_link in node_link.dev_links:
+            try:
+                dev = self._devices[dev_link.id]
+                if dev_link.name == dev.name:
+                    # id and name both match
+                    dev.set_cmd_from(dev_link)
+                    continue
+            except KeyError:
+                pass
+            for dev in self._devices.values():
+                if dev_link.name == dev.name:
+                    dev.set_cmd_from(dev_link)
+                    break
+
+    @pyqtSlot()
+    def _apply_all(self):
+        """Send all valid commands to nodeserver.
+        """
+        node_link = self.get_cmd_link()
+        if node_link:
+            self.send_command(node_link)
 
     def get_title(self):
         return self._title.text()
