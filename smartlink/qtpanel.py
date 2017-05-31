@@ -76,7 +76,7 @@ class CommandWidget(QFrame):
         "bool": CBoolWidget,
         "enum": CEnumWidget,
     }
-    _StyleNormal = "CommandWidget { border: 1px solid #CCCCCC; }"
+    _StyleNormal = "CommandWidget { border: 1px solid #E6E6E6; }"
     _StyleError = "CommandWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, dev_panel, desc_link):
@@ -222,7 +222,7 @@ class UpdateWidget(QFrame):
         "bool": UBoolWidget,
         "enum": UEnumWidget,
     }
-    _StyleNormal = "UpdateWidget { border: 1px solid #CCCCCC; }"
+    _StyleNormal = "UpdateWidget { border: 1px solid #E6E6E6; }"
     _StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, dev_panel, desc_link):

@@ -10,8 +10,12 @@ from smartlink import node
 class DG645(node.Device):
     """Smartlink device for DG645 Digital Delay Generator."""
 
-    def __init__(self, name="DG645"):
+    def __init__(self, name="DG645", ports=None):
+        """`ports` is a list of avaliable port names. If it is None, no serial
+        connection management is provided on panel."""
         super().__init__(name)
+        self._ports = ports
+
         self._connected = False
         self._reader = None
         self._writer = None
@@ -32,16 +36,22 @@ class DG645(node.Device):
 
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
-        self.add_update("Prescale Factor", "int", lambda: self._prescale)
-        self.add_update("Advanced Triggering", "bool", lambda: self._advt)
-        self.add_command("Set Prescale Factor",
-                              "int", self.set_prescale_factor)
-        self.add_command("Set Advanced Triggering", "bool", self.set_advt)
+        if self._ports:
+            self.add_update("Connection", "bool", lambda: self._connected, grp="")
+            port_ext_args = ';'.join(self._ports)
+            self.add_command("Connect", "enum", self.connect_to_port, ext_args=port_ext_args, grp="")
+            self.add_command("Disconnect", "", self.close_port, grp="")
+
         self.add_command("Set Trigger Source", "enum", self.set_trigger_source,
                               ("0 Internal;1 External rising edges;2 External falling edges;"
                                "3 Single shot external rising edges;4 Single shot external falling edges;"
-                               "5 Single shot;6 Line"))
-        self.add_command("Trigger", "", self.trigger)
+                               "5 Single shot;6 Line"), grp="Trigger")
+        self.add_command("Trigger", "", self.trigger, grp="Trigger")
+        self.add_update("Prescale Factor", "int", lambda: self._prescale, grp="Prescale")
+        self.add_update("Advanced Triggering", "bool", lambda: self._advt, grp="Prescale")
+        self.add_command("Set Prescale Factor",
+                              "int", self.set_prescale_factor, grp="Prescale")
+        self.add_command("Set Advanced Triggering", "bool", self.set_advt, grp="Prescale")
 
         self.add_update("A", ["enum", "float"], lambda: self._delays[2], [
                              "T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
@@ -52,10 +62,45 @@ class DG645(node.Device):
         self.add_command("B", ["enum", "float"], lambda d, t: self.set_delay('3', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
 
+        self.add_update("C", ["enum", "float"], lambda: self._delays[4], [
+                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
+        self.add_update("D", ["enum", "float"], lambda: self._delays[5], [
+                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
+        self.add_command("C", ["enum", "float"], lambda d, t: self.set_delay('4', d, t),
+                              ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
+        self.add_command("D", ["enum", "float"], lambda d, t: self.set_delay('5', d, t),
+                              ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
+
+        self.add_update("E", ["enum", "float"], lambda: self._delays[6], [
+                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
+        self.add_update("F", ["enum", "float"], lambda: self._delays[7], [
+                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
+        self.add_command("E", ["enum", "float"], lambda d, t: self.set_delay('6', d, t),
+                              ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
+        self.add_command("F", ["enum", "float"], lambda d, t: self.set_delay('7', d, t),
+                              ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
+
+        self.add_update("G", ["enum", "float"], lambda: self._delays[8], [
+                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
+        self.add_update("H", ["enum", "float"], lambda: self._delays[9], [
+                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
+        self.add_command("G", ["enum", "float"], lambda d, t: self.set_delay('8', d, t),
+                              ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
+        self.add_command("H", ["enum", "float"], lambda d, t: self.set_delay('9', d, t),
+                              ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
+
+    def connect_to_port(self, port_num):
+        """Connect to port_num-th port in self._ports."""
+        try:
+            index = int(port_num)
+            ensure_future(self.open_port(self._ports[index]))
+        except (ValueError, IndexError):
+            self.logger.error(self.fullname, "No such port number: {0}".format(port_num))
+
     async def open_port(self, port):
         """Open serial port `port`"""
         if self._connected:
-            self.logger.error("DG645", "DG645 is already connected.")
+            #self.logger.error(self.fullname, "DG645 is already connected.")
             return
         # Serial port characteristcs
         baudrate = 9600
@@ -68,17 +113,17 @@ class DG645(node.Device):
                 open_serial_connection(url=port, baudrate=baudrate, bytesize=bytesize,
                                        parity=parity, stopbits=stopbits, rtscts=rtscts), timeout=self._timeout)
         except asyncio.TimeoutError:
-            self.logger.error("DG645", "Connection timeout.")
+            self.logger.error(self.fullname, "Connection timeout.")
             return
         except (OSError, serial.SerialException):
             self.logger.error(
-                "DG645", "Failed to open port {port}".format(port=port))
+                self.fullname, "Failed to open port {port}".format(port=port))
             return
         self._connected = True
         # Identify DG645
         res = await self._write_and_read(b"*IDN?")
         if res.find(b"DG645") == -1:
-            self.logger.error("DG645", "Connected device is not DG645.")
+            self.logger.error(self.fullname, "Connected device is not DG645.")
             self.close_port()
             return
         # Reset defaults
@@ -95,7 +140,7 @@ class DG645(node.Device):
     def close_port(self):
         """Close serial port."""
         if not self._connected:
-            self.logger.error("DG645", "Not connected to DG645.")
+            #self.logger.error(self.fullname, "Not connected.")
             return
         self._writer.close()
         self._reader = None
@@ -109,7 +154,7 @@ class DG645(node.Device):
     async def _write(self, cmd):
         """Write cmd to opened port."""
         if not self._connected:
-            self.logger.error("DG645", "Not connected to DG645.")
+            self.logger.error(self.fullname, "Not connected.")
             return
         with (await self._lock):
             self._writer.write(cmd)
@@ -118,7 +163,7 @@ class DG645(node.Device):
     async def _write_and_read(self, cmd):
         """Write cmd to opened port, then await response."""
         if not self._connected:
-            self.logger.error("DG645", "Not connected to DG645.")
+            self.logger.error(self.fullname, "Not connected.")
             return b""
         with (await self._lock):
             self._writer.write(cmd)
@@ -126,12 +171,12 @@ class DG645(node.Device):
             try:
                 response = await wait_for(self._reader.readuntil(b"\r\n"), timeout=self._timeout)
             except asyncio.TimeoutError:
-                self.logger.error("DG645", "Read timeout.")
+                self.logger.error(self.fullname, "Read timeout.")
                 self.close_port()
                 return b""
         if response == b"":
             # Connection is closed
-            self.logger.error("DG645", "Connection to DG645 is lost.")
+            self.logger.error(self.fullname, "Connection lost.")
             self.close_port()
         return response[:-2]
 
@@ -201,4 +246,4 @@ class DG645(node.Device):
                 self._delays[int(c)] = [ch, delay]
         except (ValueError, IndexError):
             self.logger.error(
-                "DG645", "Failed to parse delay settings from device.")
+                self.fullname, "Failed to parse delay settings from device.")
