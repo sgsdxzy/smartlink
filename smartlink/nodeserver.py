@@ -24,13 +24,12 @@ class NodeServer:
         interval is the time interval between checking updates.
         loop is an asyncio event loop.
         """
-        if loop == None:
+        if loop is None:
             self._loop = asyncio.get_event_loop()
         else:
             self._loop = loop
         self._node = node
         desc_link = node.get_desc_link()
-        #print(desc_link)
         self._str_desc = desc_link.SerializeToString()
         self._interval = interval
         self._clients = []
@@ -65,7 +64,6 @@ class NodeServer:
             while True:
                 if self._clients:
                     update_link = self._node.get_update_link()
-                    #print(update_link)
                     bin_link = update_link.SerializeToString()
                     if bin_link:
                         # Write only when there's news to write
@@ -102,7 +100,6 @@ class NodeServer:
 
             # Send a full link
             full_link = self._node.get_full_update_link()
-            #print(full_link)
             bin_link = full_link.SerializeToString()
             client.write_bin_link(bin_link)
 

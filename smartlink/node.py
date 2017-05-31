@@ -252,7 +252,7 @@ class Device:
 
         Returns: the created Command.
         """
-        if not grp in self._groups:
+        if grp not in self._groups:
             self._groups.append(grp)
         id_ = len(self._commands)
         cmd = Command(self, id_, name, sigs, func, ext_args, grp)
@@ -265,7 +265,7 @@ class Device:
 
         Returns: the created Update.
         """
-        if not grp in self._groups:
+        if grp not in self._groups:
             self._groups.append(grp)
         id_ = len(self._updates)
         update = Update(self, id_, name, sigs, func, ext_args, grp)

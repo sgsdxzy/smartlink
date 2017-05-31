@@ -31,8 +31,8 @@ class EditableTabBar(QTabBar):
     def eventFilter(self, widget, event):
         if ((event.type() == QEvent.MouseButtonPress
              and not self._editor.geometry().contains(event.globalPos()))
-            or (event.type() == QEvent.KeyPress
-                and event.key() == Qt.Key_Escape)):
+             or (event.type() == QEvent.KeyPress
+             and event.key() == Qt.Key_Escape)):
             self._editor.hide()
             return True
         return super().eventFilter(widget, event)

@@ -7,6 +7,7 @@ import serial
 
 from smartlink import node
 
+
 class VMMD3(node.Device):
     """Smartlink device for Uniblitz VMM-D3 Shutter Driver."""
 
@@ -49,7 +50,7 @@ class VMMD3(node.Device):
 
     def open_port(self, port):
         if self._connected:
-            #self.logger.error(self.fullname, "Already connected.")
+            # self.logger.error(self.fullname, "Already connected.")
             return
         # Serial port characteristcs
         baudrate = 9600
@@ -66,7 +67,7 @@ class VMMD3(node.Device):
 
     def close_port(self):
         if not self._connected:
-            #self.logger.error(self.fullname, "Not connected.")
+            # self.logger.error(self.fullname, "Not connected.")
             return
         self._ser.close()
         self._connected = False

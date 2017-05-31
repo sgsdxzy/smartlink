@@ -92,7 +92,7 @@ class SC300(node.Device):
     async def open_port(self, port):
         """Open serial port `port`"""
         if self._connected:
-            #self.logger.error(self.fullname, "Already connected.")
+            # self.logger.error(self.fullname, "Already connected.")
             return
         # Serial port characteristcs
         baudrate = 19200
@@ -120,7 +120,7 @@ class SC300(node.Device):
     def close_port(self):
         """Close serial port."""
         if not self._connected:
-            #self.logger.error(self.fullname, "Not connected.")
+            # self.logger.error(self.fullname, "Not connected.")
             return
         self.peaceful_disconnect = True
         self._transport.close()

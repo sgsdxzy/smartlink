@@ -1,10 +1,10 @@
 from distutils.core import setup, Extension
 
-setup (name = 'smartlink',
-    version='0.84',
+setup(name='smartlink',
+    version='0.85',
     description='Smartlink protocal and implementation',
     author='Light',
     author_email='sgsdxzy@gmail.com',
-    packages = ['smartlink'],
+    packages=['smartlink'],
     ext_package='smartlink',
-   )
+    )

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from smartlink.node import Node
 from smartlink.nodeserver import NodeServer
 

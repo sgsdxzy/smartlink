@@ -65,16 +65,16 @@ def args_to_sequence(args):
                 yield arg
             elif isinstance(arg, bytearray):
                 yield bytes(arg)
-            elif arg == True:
+            elif arg is True:
                 yield '1'
-            elif arg == False:
+            elif arg is False:
                 yield '0'
             else:
                 yield str(arg)
         return
-    if args == True:
+    if args is True:
         yield '1'
-    elif args == False:
+    elif args is False:
         yield '0'
     else:
         yield str(args)

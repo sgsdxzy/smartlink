@@ -1,6 +1,4 @@
 import asyncio
-from asyncio import ensure_future
-import logging
 from smartlink.node import Node
 from smartlink.nodeserver import NodeServer
 
@@ -25,7 +23,6 @@ def main():
     node.add_device(vmm)
     node.add_device(sc300)
     node.add_device(dg645)
-
 
     loop = asyncio.get_event_loop()
     server = NodeServer(node, interval=0.2, loop=loop)

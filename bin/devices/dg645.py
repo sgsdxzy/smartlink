@@ -7,6 +7,7 @@ from serial_asyncio import open_serial_connection
 
 from smartlink import node
 
+
 class DG645(node.Device):
     """Smartlink device for DG645 Digital Delay Generator."""
 
@@ -43,9 +44,9 @@ class DG645(node.Device):
             self.add_command("Disconnect", "", self.close_port, grp="")
 
         self.add_command("Set Trigger Source", "enum", self.set_trigger_source,
-                              ("0 Internal;1 External rising edges;2 External falling edges;"
-                               "3 Single shot external rising edges;4 Single shot external falling edges;"
-                               "5 Single shot;6 Line"), grp="Trigger")
+            ("0 Internal;1 External rising edges;2 External falling edges;"
+            "3 Single shot external rising edges;4 Single shot external falling edges;"
+            "5 Single shot;6 Line"), grp="Trigger")
         self.add_command("Trigger", "", self.trigger, grp="Trigger")
         self.add_update("Prescale Factor", "int", lambda: self._prescale, grp="Prescale")
         self.add_update("Advanced Triggering", "bool", lambda: self._advt, grp="Prescale")
@@ -53,37 +54,29 @@ class DG645(node.Device):
                               "int", self.set_prescale_factor, grp="Prescale")
         self.add_command("Set Advanced Triggering", "bool", self.set_advt, grp="Prescale")
 
-        self.add_update("A", ["enum", "float"], lambda: self._delays[2], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
-        self.add_update("B", ["enum", "float"], lambda: self._delays[3], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
+        self.add_update("A", ["enum", "float"], lambda: self._delays[2], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
+        self.add_update("B", ["enum", "float"], lambda: self._delays[3], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
         self.add_command("A", ["enum", "float"], lambda d, t: self.set_delay('2', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
         self.add_command("B", ["enum", "float"], lambda d, t: self.set_delay('3', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
 
-        self.add_update("C", ["enum", "float"], lambda: self._delays[4], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
-        self.add_update("D", ["enum", "float"], lambda: self._delays[5], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
+        self.add_update("C", ["enum", "float"], lambda: self._delays[4], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
+        self.add_update("D", ["enum", "float"], lambda: self._delays[5], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
         self.add_command("C", ["enum", "float"], lambda d, t: self.set_delay('4', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
         self.add_command("D", ["enum", "float"], lambda d, t: self.set_delay('5', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
 
-        self.add_update("E", ["enum", "float"], lambda: self._delays[6], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
-        self.add_update("F", ["enum", "float"], lambda: self._delays[7], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
+        self.add_update("E", ["enum", "float"], lambda: self._delays[6], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
+        self.add_update("F", ["enum", "float"], lambda: self._delays[7], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
         self.add_command("E", ["enum", "float"], lambda d, t: self.set_delay('6', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
         self.add_command("F", ["enum", "float"], lambda d, t: self.set_delay('7', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
 
-        self.add_update("G", ["enum", "float"], lambda: self._delays[8], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
-        self.add_update("H", ["enum", "float"], lambda: self._delays[9], [
-                             "T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
+        self.add_update("G", ["enum", "float"], lambda: self._delays[8], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
+        self.add_update("H", ["enum", "float"], lambda: self._delays[9], ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
         self.add_command("G", ["enum", "float"], lambda d, t: self.set_delay('8', d, t),
                               ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
         self.add_command("H", ["enum", "float"], lambda d, t: self.set_delay('9', d, t),
@@ -100,7 +93,7 @@ class DG645(node.Device):
     async def open_port(self, port):
         """Open serial port `port`"""
         if self._connected:
-            #self.logger.error(self.fullname, "DG645 is already connected.")
+            # self.logger.error(self.fullname, "DG645 is already connected.")
             return
         # Serial port characteristcs
         baudrate = 9600
@@ -140,7 +133,7 @@ class DG645(node.Device):
     def close_port(self):
         """Close serial port."""
         if not self._connected:
-            #self.logger.error(self.fullname, "Not connected.")
+            # self.logger.error(self.fullname, "Not connected.")
             return
         self._writer.close()
         self._reader = None
