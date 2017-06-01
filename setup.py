@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='smartlink',
-      version='0.85',
+      version='0.86',
       description='Smartlink protocal and implementation',
       author='Light',
       author_email='sgsdxzy@gmail.com',
