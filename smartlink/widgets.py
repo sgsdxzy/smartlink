@@ -78,26 +78,26 @@ class CIntWidget(CStrWidget):
 
 class UBoolWidget(QPushButton):
     """Widget for handling "bool" type argument of update."""
-    _StyleTrue = "QPushButton { color: #000000; background-color : #00FF00}"
-    _StyleFalse = "QPushButton { color: #FFFFFF; background-color : #FF0000}"
-    _StyleUnknown = "QPushButton { color: #FFFFFF; background-color : #808080}"
+    StyleTrue = "QPushButton { color: #000000; background-color : #00FF00}"
+    StyleFalse = "QPushButton { color: #FFFFFF; background-color : #FF0000}"
+    StyleUnknown = "QPushButton { color: #FFFFFF; background-color : #808080}"
 
     def __init__(self, ext_arg=None):
         super().__init__("UKN")
-        self.setStyleSheet(self._StyleUnknown)
+        self.setStyleSheet(self.StyleUnknown)
         self.setMaximumWidth(32)
 
     def set_arg(self, arg):
         if arg == '1':
-            self.setStyleSheet(self._StyleTrue)
+            self.setStyleSheet(self.StyleTrue)
             self.setText("ON")
             self.setChecked(True)
         elif arg == '0':
-            self.setStyleSheet(self._StyleFalse)
+            self.setStyleSheet(self.StyleFalse)
             self.setText("OFF")
             self.setChecked(False)
         else:
-            self.setStyleSheet(self._StyleUnknown)
+            self.setStyleSheet(self.StyleUnknown)
             self.setText("UKN")
             self.setChecked(False)
 
@@ -107,25 +107,25 @@ class UBoolWidget(QPushButton):
 
 class CBoolWidget(QPushButton):
     """Widget for handling "bool" type argument of command."""
-    _StyleTrue = "QPushButton { color: #000000; background-color : #00FF00}"
-    _StyleFalse = "QPushButton { color: #FFFFFF; background-color : #FF0000}"
+    StyleTrue = "QPushButton { color: #000000; background-color : #00FF00}"
+    StyleFalse = "QPushButton { color: #FFFFFF; background-color : #FF0000}"
     _True_input = ("1", "T", "True", "Y", "t", "true")
 
     def __init__(self, ext_arg=None):
         super().__init__("OFF")
         self.setCheckable(True)
-        self.setStyleSheet(self._StyleFalse)
+        self.setStyleSheet(self.StyleFalse)
         self.setMaximumWidth(32)
         self.toggled.connect(self._toggle)
 
     @pyqtSlot(bool)
     def _toggle(self, checked):
         if checked:
-            self.setStyleSheet(self._StyleTrue)
+            self.setStyleSheet(self.StyleTrue)
             self.setText("ON")
             self.setChecked(True)
         else:
-            self.setStyleSheet(self._StyleFalse)
+            self.setStyleSheet(self.StyleFalse)
             self.setText("OFF")
             self.setChecked(False)
 

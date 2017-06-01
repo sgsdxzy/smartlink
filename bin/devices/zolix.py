@@ -1,4 +1,4 @@
-"""Smartlink device for Zolix SC300 controller."""
+"""Smartlink device for Zolix Devices."""
 
 import asyncio
 from asyncio import ensure_future, wait_for
@@ -68,18 +68,13 @@ class SC300(node.Device):
 
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
-        """Initilize smartlink commands and updates."""
         if self._ports:
             self.add_update("Connection", "bool", lambda: self._connected, grp="")
             port_ext_args = ';'.join(self._ports)
             self.add_command("Connect", "enum", self.connect_to_port, ext_args=port_ext_args, grp="")
             self.add_command("Disconnect", "", self.close_port, grp="")
 
-        self.add_update("Status", "bool", lambda: self._y > 100000, grp="Shutter")
-        self.add_update("Moving", "bool", lambda: self._moving, grp="Shutter")
-        self.add_update("Position", "int", lambda: self._y, grp="Shutter")
-        self.add_command("Open", "", self.open, grp="Shutter")
-        self.add_command("Close", "", lambda: self.zero(self.Y), grp="Shutter")
+        # TODO: Add full SC300 controls
 
     def connect_to_port(self, port_num):
         """Connect to port_num-th port in self._ports."""
@@ -108,7 +103,7 @@ class SC300(node.Device):
             self.logger.error(self.fullname, "Connection timeout.")
             return
         except (OSError, serial.SerialException):
-            self.logger.error(
+            self.logger.exception(
                 self.fullname, "Failed to open port {port}".format(port=port))
             return
         self._connected = True
@@ -142,7 +137,6 @@ class SC300(node.Device):
         if not self._verified:
             if res.find(b"SC300") != -1:
                 self._verified = True
-                self._write(b"?Y")
                 return
             else:
                 self.logger.error(self.fullname, "Connected device is not SC300.")
@@ -178,7 +172,3 @@ class SC300(node.Device):
         else:
             self._write(b''.join((b'-', axis, b',', str(-n).encode())))
         self._moving = '1'
-
-    def open(self):
-        if self._y < 100000:
-            self.relative_move(self.Y, 120000 - self._y)

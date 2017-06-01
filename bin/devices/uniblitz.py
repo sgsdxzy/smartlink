@@ -1,7 +1,4 @@
-"""Smartlink device for Uniblitz VMM-D3 Shutter Driver."""
-
-import asyncio
-from asyncio import ensure_future
+"""Smartlink device for Uniblitz Devices."""
 
 import serial
 
@@ -11,19 +8,26 @@ from smartlink import node
 class VMMD3(node.Device):
     """Smartlink device for Uniblitz VMM-D3 Shutter Driver."""
 
-    def __init__(self, name="VMM-D3", DG645=None, ports=None):
-        """`DG645` is the associated DG645 to perform single shot.
-        `ports` is a list of avaliable port names. If it is None, no serial
+    def __init__(self, name="VMM-D3", NO=False, ports=None):
+        """`ports` is a list of avaliable port names. If it is None, no serial
         connection management is provided on panel."""
         super().__init__(name)
-        self._dg645 = DG645
+        self._NO = NO   # normally open
         self._ports = ports
 
         self._connected = False
         self._ser = None
 
         # VMM-D3 status
-        self._is_open = '1'
+        if self._NO:
+            # Normally open
+            self._ch1 = '1'
+            self._ch2 = '1'
+            self._ch3 = '1'
+        else:
+            self._ch1 = '0'
+            self._ch2 = '0'
+            self._ch3 = '0'
 
         self._init_smartlink()
 
@@ -35,10 +39,7 @@ class VMMD3(node.Device):
             self.add_command("Connect", "enum", self.connect_to_port, ext_args=port_ext_args, grp="")
             self.add_command("Disconnect", "", self.close_port, grp="")
 
-        self.add_update("Status", "bool", lambda: self._is_open, grp="Shutter")
-        self.add_command("Open", "", self.open_shutter, grp="Shutter")
-        self.add_command("Close", "", self.close_shutter, grp="Shutter")
-        self.add_command("FIRE!", "", self.fire_single_shot, grp="Shutter")
+        # TODO: full VMM-D3 controls
 
     def connect_to_port(self, port_num):
         """Connect to port_num-th port in self._ports."""
@@ -61,7 +62,7 @@ class VMMD3(node.Device):
             self._ser = serial.Serial(port=port, baudrate=baudrate,
                 bytesize=bytesize, parity=parity, stopbits=stopbits)
         except serial.SerialException:
-            self.logger.error(self.fullname, "Failed to open port {port}".format(port=port))
+            self.logger.exception(self.fullname, "Failed to open port {port}".format(port=port))
             return
         self._connected = True
 
@@ -79,30 +80,52 @@ class VMMD3(node.Device):
         self._ser.write(cmd)
         return True
 
-    def open_shutter(self):
-        # VMM-D3 is put at normally open
-        if self._write(b'A'):
-            self._is_open = '1'
+    def open_shutter(self, ch):
+        if ch == '1':
+            if self._NO:
+                cmd = b'A'
+            else:
+                cmd = b'@'
+            if self._write(cmd):
+                self._ch1 = '1'
+        elif ch == '2':
+            if self._NO:
+                cmd = b'C'
+            else:
+                cmd = b'B'
+            if self._write(cmd):
+                self._ch2 = '1'
+        elif ch == '3':
+            if self._NO:
+                cmd = b'E'
+            else:
+                cmd = b'D'
+            if self._write(cmd):
+                self._ch3 = '1'
+        else:
+            self.logger.error(self.fullname, "No such channel: {0}".format(ch))
 
-    def close_shutter(self):
-        # VMM-D3 is put at normally open
-        if self._write(b'@'):
-            self._is_open = '0'
-
-    def fire_single_shot(self):
-        """User must first open zolix SC300 controlled shutter and put
-        DG645 in "3 Single shot external rising edges" trigger mode. This
-        method will trigger DG645, open shutter after a laser operation cycle,
-        then close it after another laser operation cycle."""
-        if not self._dg645:
-            self.logger.error(self.fullname, "No DG645 selected.")
-            return
-        ensure_future(self._fire_single_shot())
-
-    async def _fire_single_shot(self):
-        self.close_shutter()
-        await self._dg645._write(b"*TRG")
-        await asyncio.sleep(0.2)
-        self.open_shutter()
-        await asyncio.sleep(0.2)
-        self.close_shutter()
+    def close_shutter(self, ch):
+        if ch == '1':
+            if self._NO:
+                cmd = b'@'
+            else:
+                cmd = b'A'
+            if self._write(cmd):
+                self._ch1 = '0'
+        elif ch == '2':
+            if self._NO:
+                cmd = b'B'
+            else:
+                cmd = b'C'
+            if self._write(cmd):
+                self._ch2 = '0'
+        elif ch == '3':
+            if self._NO:
+                cmd = b'D'
+            else:
+                cmd = b'E'
+            if self._write(cmd):
+                self._ch3 = '0'
+        else:
+            self.logger.error(self.fullname, "No such channel: {0}".format(ch))

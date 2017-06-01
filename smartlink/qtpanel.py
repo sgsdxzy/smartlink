@@ -14,7 +14,7 @@ from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 from google.protobuf.message import DecodeError
 from google.protobuf import json_format
 
-from smartlink import EndOfStreamError, ProtocalError, StreamReadWriter, link_pb2, varint
+from smartlink import EndOfStreamError, StreamReadWriter, link_pb2, varint
 from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget,
                                UEnumWidget, CStrWidget, CFloatWidget, CIntWidget, CBoolWidget, CEnumWidget)
 
@@ -76,8 +76,8 @@ class CommandWidget(QFrame):
         "bool": CBoolWidget,
         "enum": CEnumWidget,
     }
-    _StyleNormal = "CommandWidget { border: 1px solid #E6E6E6; }"
-    _StyleError = "CommandWidget { border: 1px solid #FF0000; }"
+    StyleNormal = "CommandWidget { border: 1px solid #E6E6E6; }"
+    StyleError = "CommandWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, dev_panel, desc_link):
         super().__init__()
@@ -95,7 +95,7 @@ class CommandWidget(QFrame):
         self.logger = dev_panel.logger
 
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.setStyleSheet(self._StyleNormal)
+        self.setStyleSheet(self.StyleNormal)
         self._layout = QHBoxLayout()
         self.setLayout(self._layout)
         self._generate_UI()
@@ -144,7 +144,7 @@ class CommandWidget(QFrame):
     @pyqtSlot()
     def _light_flash(self):
         """A flashing light effect"""
-        self.setStyleSheet(self._StyleNormal)
+        self.setStyleSheet(self.StyleNormal)
 
     def get_cmd(self, dev_link):
         """Collect args from widgets and wrap them into a link, then append it
@@ -200,7 +200,7 @@ class CommandWidget(QFrame):
         """Send command to nodeserver."""
         cmds = tuple(widget.get_arg() for widget in self._widget_list)
         if not all(cmds):
-            self.setStyleSheet(self._StyleError)
+            self.setStyleSheet(self.StyleError)
             QTimer.singleShot(1000, self._light_flash)
             return
         else:
@@ -222,8 +222,8 @@ class UpdateWidget(QFrame):
         "bool": UBoolWidget,
         "enum": UEnumWidget,
     }
-    _StyleNormal = "UpdateWidget { border: 1px solid #E6E6E6; }"
-    _StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
+    StyleNormal = "UpdateWidget { border: 1px solid #E6E6E6; }"
+    StyleError = "UpdateWidget { border: 1px solid #FF0000; }"
 
     def __init__(self, dev_panel, desc_link):
         super().__init__()
@@ -241,7 +241,7 @@ class UpdateWidget(QFrame):
         self.logger = dev_panel.logger
 
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.setStyleSheet(self._StyleNormal)
+        self.setStyleSheet(self.StyleNormal)
         self._layout = QHBoxLayout()
         self.setLayout(self._layout)
         self._generate_UI()
@@ -282,7 +282,7 @@ class UpdateWidget(QFrame):
     @pyqtSlot()
     def _light_flash(self):
         """A flashing light effect"""
-        self.setStyleSheet(self._StyleNormal)
+        self.setStyleSheet(self.StyleNormal)
 
     def update_from(self, link):
         """Update contents from link.
@@ -294,7 +294,7 @@ class UpdateWidget(QFrame):
                 self._widget_list[i].set_arg(arg)
         except Exception:
             self.logger.exception(self.fullname, "Failed to display update.")
-            self.setStyleSheet(self._StyleError)
+            self.setStyleSheet(self.StyleError)
             QTimer.singleShot(1000, self._light_flash)
 
     def get_status(self, dev_link):
@@ -318,9 +318,9 @@ class GroupPanel(QFrame):
     maximum number of basic QWidgets of the same type (command/update)
     on a single line.
     """
-    _title_font = QFont()
-    _title_font.setWeight(QFont.Bold)
-    _title_font.setPointSize(12)
+    title_font = QFont()
+    title_font.setWeight(QFont.Bold)
+    title_font.setPointSize(12)
 
     def __init__(self, name="", maxlen=10):
         super().__init__()
@@ -330,7 +330,7 @@ class GroupPanel(QFrame):
         self.setLayout(QHBoxLayout(self))
         if name != "":
             label = QLabel(name, self)
-            label.setFont(self._title_font)
+            label.setFont(self.title_font)
             self.layout().addWidget(label)
 
         self._update_layout = QVBoxLayout()
@@ -408,10 +408,13 @@ class DevicePanel(QFrame):
     """A subpanel to display device status and _commands. It is
     generated automatically according to the description link _desc_link.
     """
-    _title_font = QFont()
-    _title_font.setWeight(QFont.Bold)
-    _title_font.setPointSize(16)
-    _datefmt = '%Y-%m-%d %H:%M:%S'
+    title_font = QFont()
+    title_font.setWeight(QFont.Bold)
+    title_font.setPointSize(16)
+    if os.name == 'nt':
+        datefmt = '%Y-%m-%d %H-%M-%S'
+    else:
+        datefmt = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, node_panel, desc_link):
         super().__init__()
@@ -426,12 +429,14 @@ class DevicePanel(QFrame):
         self._groups = {}
         self._name_dict = None  # lazy initialization
 
-        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
+        self.setFrameStyle(QFrame.Panel | QFrame.Raised)
         self.setLineWidth(1.5)
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
+        self._layout.setSpacing(0)
         self._headline = QHBoxLayout()
         self._layout.addLayout(self._headline)
+        self._headline.setSpacing(10)
         self._headline.addStretch(1)
         self._save_status_btn = QPushButton("Save status")
         self._save_status_btn.clicked.connect(self._save_status)
@@ -454,7 +459,7 @@ class DevicePanel(QFrame):
         Returns: None
         """
         self._title = QLabel(self.name)
-        self._title.setFont(self._title_font)
+        self._title.setFont(self.title_font)
         self._headline.insertWidget(0, self._title)
 
         for grp in self._desc_link.groups:
@@ -491,7 +496,7 @@ class DevicePanel(QFrame):
     @pyqtSlot()
     def _save_status(self):
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
-        time = datetime.today().strftime(self._datefmt)
+        time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
             pdir, "save", "{name} {time} status{ext}".format(name=self.fullname,
                                                              time=time, ext='.json'))
@@ -545,7 +550,7 @@ class DevicePanel(QFrame):
     @pyqtSlot()
     def _save_cmd(self):
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
-        time = datetime.today().strftime(self._datefmt)
+        time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
             pdir, "save", "{name} {time} commands{ext}".format(name=self.fullname,
                                                                time=time, ext='.json'))
@@ -698,14 +703,17 @@ class NodePanel(QFrame):
     """A panel to display node status and send controls to node. It is
     generated automatically according to the first description link received.
     """
-    _StyleDisabled = "QPushButton { background-color : #808080}"
-    _StyleWorking = "QPushButton { background-color : #00FFFF}"
-    _StyleReady = "QPushButton { background-color : #00FF00}"
-    _StyleError = "QPushButton { background-color : #FF0000}"
-    _title_font = QFont()
-    _title_font.setWeight(QFont.Black)
-    _title_font.setPointSize(18)
-    _datefmt = '%Y-%m-%d %H:%M:%S'
+    StyleDisabled = "QPushButton { background-color : #808080}"
+    StyleWorking = "QPushButton { background-color : #00FFFF}"
+    StyleReady = "QPushButton { background-color : #00FF00}"
+    StyleError = "QPushButton { background-color : #FF0000}"
+    title_font = QFont()
+    title_font.setWeight(QFont.Black)
+    title_font.setPointSize(18)
+    if os.name == 'nt':
+        datefmt = '%Y-%m-%d %H-%M-%S'
+    else:
+        datefmt = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, parent=None, loop=None):
         super().__init__(parent)
@@ -734,11 +742,11 @@ class NodePanel(QFrame):
         self._host_edit.setMinimumWidth(100)
         self._outer_layout.addWidget(self._host_edit, 0, 0)
         self._status_light = QPushButton()
-        self._status_light.setStyleSheet(self._StyleDisabled)
+        self._status_light.setStyleSheet(self.StyleDisabled)
         self._status_light.setFixedSize(24, 24)
         self._outer_layout.addWidget(self._status_light, 0, 1)
         self._title = QLabel("Not connected")
-        self._title.setFont(self._title_font)
+        self._title.setFont(self.title_font)
         self._title.setAlignment(Qt.AlignCenter)
         self._outer_layout.addWidget(self._title, 0, 2)
         self._status_bar = QStatusBar()
@@ -764,6 +772,7 @@ class NodePanel(QFrame):
         self._outer_layout.addWidget(self._close_btn, 0, 3, 1, 2)
         self._layout = QVBoxLayout()
         self._outer_layout.addLayout(self._layout, 1, 1, 8, 3)
+        self._layout.setSpacing(15)
 
         self._connect_btn.clicked.connect(self._connect_btn_exec)
         self._disconnect_btn.clicked.connect(self._disconnect_btn_exec)
@@ -804,7 +813,7 @@ class NodePanel(QFrame):
             msg = "Connecting to {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
             self.logger.info("", msg, "PANEL")
-            self._status_light.setStyleSheet(self._StyleWorking)
+            self._status_light.setStyleSheet(self.StyleWorking)
             ensure_future(self._hanlde_connection())
 
     async def _hanlde_connection(self):
@@ -826,7 +835,7 @@ class NodePanel(QFrame):
             self._peaceful_disconnect = False
             self.fullname = self._desc_link.name
             self._generate_panel()
-            self._status_light.setStyleSheet(self._StyleReady)
+            self._status_light.setStyleSheet(self.StyleReady)
             msg = "Connected to {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
             self.logger.info("", msg, "PANEL")
@@ -846,7 +855,7 @@ class NodePanel(QFrame):
                     dev = self._devices[dev_link.id]
                     dev.update_from(dev_link)
                 # A flashing light effect
-                self._status_light.setStyleSheet(self._StyleWorking)
+                self._status_light.setStyleSheet(self.StyleWorking)
                 QTimer.singleShot(100, self._light_flash)
 
         except EndOfStreamError:
@@ -854,17 +863,17 @@ class NodePanel(QFrame):
                 msg = "Disconnected from server {ip}".format(ip=self._host_ip)
                 self._status_bar.showMessage(msg)
                 self.logger.info("", msg, "PANEL")
-                self._status_light.setStyleSheet(self._StyleDisabled)
+                self._status_light.setStyleSheet(self.StyleDisabled)
             else:
                 msg = "Server at {ip} dropped connection.".format(
                     ip=self._host_ip)
                 self._status_bar.showMessage(msg)
                 self.logger.error("", msg, "PANEL")
-                self._status_light.setStyleSheet(self._StyleError)
+                self._status_light.setStyleSheet(self.StyleError)
         except Exception as err:
             msg = "Lost connection to {ip}.".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
-            self._status_light.setStyleSheet(self._StyleError)
+            self._status_light.setStyleSheet(self.StyleError)
             if isinstance(err, DecodeError):
                 self.logger.error("", "Failed to decode NodeLink.", "PANEL")
             else:
@@ -897,7 +906,7 @@ class NodePanel(QFrame):
     @pyqtSlot()
     def _light_flash(self):
         if self._connected:
-            self._status_light.setStyleSheet(self._StyleReady)
+            self._status_light.setStyleSheet(self.StyleReady)
 
     @pyqtSlot()
     def _close(self):
@@ -931,7 +940,7 @@ class NodePanel(QFrame):
     def _save_status(self):
         """Save all status in node to json file."""
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
-        time = datetime.today().strftime(self._datefmt)
+        time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
             pdir, "save", "{name} {time} status{ext}".format(name=self.fullname,
                                                              time=time, ext='.json'))
@@ -954,7 +963,7 @@ class NodePanel(QFrame):
     def _save_cmd(self):
         """Save all valid commands in node to json file."""
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
-        time = datetime.today().strftime(self._datefmt)
+        time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
             pdir, "save", "{name} {time} commands{ext}".format(name=self.fullname,
                                                                time=time, ext='.json'))

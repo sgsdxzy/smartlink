@@ -215,7 +215,10 @@ class EditableTabWidget(QTabWidget):
 
 class ControlPanel(QMainWindow):
     """The QApplication main window for Qt smartlink control."""
-    datefmt = '%Y-%m-%d %H:%M:%S'
+    if os.name == 'nt':
+        datefmt = '%Y-%m-%d %H-%M-%S'
+    else:
+        datefmt = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self, parent=None):
         super().__init__(parent)
