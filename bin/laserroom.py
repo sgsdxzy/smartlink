@@ -135,7 +135,7 @@ class SingleShotController(uniblitz.VMMD3):
                 self.logger.error(
                     self.fullname, "DG645 must be present to perform single shot.")
                 return
-            if self._dg645._trigger_source == 3:    # Single shot external rising edges
+            if self._dg645._trigger_source != 3:    # Single shot external rising edges
                 self.logger.error(self.fullname,
                                   'Trigger mode for DG645 must be set to "Single shot external rising edges".')
                 return
@@ -187,9 +187,9 @@ def main():
     node.add_device(sc300)
     node.add_device(dg645)
 
-    # vmm.open_port('COM1')
-    # ensure_future(sc300.open_port('COM3'))
-    # ensure_future(dg645.open_port('COM8'))
+    vmm.open_port('COM1')
+    ensure_future(sc300.open_port('COM3'))
+    ensure_future(dg645.open_port('COM8'))
 
     loop = asyncio.get_event_loop()
     server = NodeServer(node, interval=0.2, loop=loop)

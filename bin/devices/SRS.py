@@ -264,7 +264,7 @@ class DG645(node.Device):
             res = await self._write_and_read(b"DLAY?%c" % str(i).encode())
             try:
                 ch, delay = res.split(b',')
-                self.delays[int(ch)] = float(delay)
+                self._delays[i] = [int(ch), float(delay)]
             except ValueError:
                 self.logger.error(
                     self.fullname, "Unrecognized response: {0}".format(res))
@@ -283,7 +283,7 @@ class DG645(node.Device):
         res = await self._write_and_read(b"DLAY?%c" % c)
         try:
             ch, delay = res.split(b',')
-            self.delays[int(ch)] = float(delay)
+            self._delays[int(c)] = [int(ch), float(delay)]
         except ValueError:
             self.logger.error(
                 self.fullname, "Unrecognized response: {0}".format(res))
