@@ -3,7 +3,7 @@ from asyncio import ensure_future
 from concurrent.futures import CancelledError
 import logging
 
-from smartlink import varint, EndOfStreamError, ProtocalError, StreamReadWriter
+from smartlink import varint, EndOfStreamError, StreamReadWriter
 from smartlink.link_pb2 import NodeLink
 from google.protobuf.message import DecodeError
 

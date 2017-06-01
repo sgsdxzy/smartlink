@@ -91,7 +91,8 @@ class Command:
     def reinit(self):
         """Call this method after device is added to another node."""
         if self._grp:
-            self.fullname = '.'.join((self._dev.fullname, self._grp, self.name))
+            self.fullname = '.'.join(
+                (self._dev.fullname, self._grp, self.name))
         else:
             self.fullname = '.'.join((self._dev.fullname, self.name))
         self.logger = self._dev.logger
@@ -154,7 +155,8 @@ class Update:
     def reinit(self):
         """Call this method after device is added to another node."""
         if self._grp:
-            self.fullname = '.'.join((self._dev.fullname, self._grp, self.name))
+            self.fullname = '.'.join(
+                (self._dev.fullname, self._grp, self.name))
         else:
             self.fullname = '.'.join((self._dev.fullname, self.name))
         self.logger = self._dev.logger

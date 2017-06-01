@@ -34,9 +34,11 @@ class VMMD3(node.Device):
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
         if self._ports:
-            self.add_update("Connection", "bool", lambda: self._connected, grp="")
+            self.add_update("Connection", "bool",
+                            lambda: self._connected, grp="")
             port_ext_args = ';'.join(self._ports)
-            self.add_command("Connect", "enum", self.connect_to_port, ext_args=port_ext_args, grp="")
+            self.add_command("Connect", "enum", self.connect_to_port,
+                             ext_args=port_ext_args, grp="")
             self.add_command("Disconnect", "", self.close_port, grp="")
 
         # TODO: full VMM-D3 controls
@@ -47,7 +49,8 @@ class VMMD3(node.Device):
             index = int(port_num)
             self.open_port(self._ports[index])
         except (ValueError, IndexError):
-            self.logger.error(self.fullname, "No such port number: {0}".format(port_num))
+            self.logger.error(
+                self.fullname, "No such port number: {0}".format(port_num))
 
     def open_port(self, port):
         if self._connected:
@@ -60,9 +63,10 @@ class VMMD3(node.Device):
         parity = serial.PARITY_NONE
         try:
             self._ser = serial.Serial(port=port, baudrate=baudrate,
-                bytesize=bytesize, parity=parity, stopbits=stopbits)
+                                      bytesize=bytesize, parity=parity, stopbits=stopbits)
         except serial.SerialException:
-            self.logger.exception(self.fullname, "Failed to open port {port}".format(port=port))
+            self.logger.exception(
+                self.fullname, "Failed to open port {port}".format(port=port))
             return
         self._connected = True
 
