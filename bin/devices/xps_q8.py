@@ -51,15 +51,17 @@ class XPS(node.Device):
         for i in range(self._group_num):
             group_name = self._group_names[i]
             self.add_update("Positon", "float",
-                lambda: self._group_positions[i], grp=group_name)
+                lambda i=i: self._group_positions[i], grp=group_name)
             self.add_update("Status", "Int",
-                lambda: self._group_status[i], grp=group_name)
+                lambda i=i: self._group_status[i], grp=group_name)
             self.add_command("Absolute move", "float",
-                lambda pos: ensure_future(self.absolute_move(i, pos)), grp=group_name)
+                lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
+            self.add_command("Absolute move", "float",
+                lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
             self.add_command("Relative move", "float",
-                lambda pos: ensure_future(self.relative_move(i, pos)), grp=group_name)
+                lambda pos, i=i: ensure_future(self.relative_move(i, pos)), grp=group_name)
             self.add_command("Relative move", "float",
-                lambda pos: ensure_future(self.relative_move(i, pos)), grp=group_name)
+                lambda pos, i=i: ensure_future(self.relative_move(i, pos)), grp=group_name)
 
     def set_backlash(self, backlash):
         """Enable/disable backlash compensation."""
@@ -112,7 +114,7 @@ class XPS(node.Device):
             self.logger.error(self.fullname, "Not connected.")
             return
         positions = await asyncio.gather(
-            *[self.GroupPositionCurrentGet(group_name) for group_name in self._group_names])
+            *[self.GroupPositionCurrentGet(group_name, 1) for group_name in self._group_names])
         for i in range(self._group_num):
             self._group_positions[i] = float(positions[i][1])
 
@@ -131,7 +133,7 @@ class XPS(node.Device):
 
         status = await self.GroupStatusGet(group_name)
         self._group_status[i] = status[1]
-        position = await self.GroupPositionCurrentGet(group_name)
+        position = await self.GroupPositionCurrentGet(group_name, 1)
         self._group_positions[i] = float(position[1])
 
     async def relative_move(self, i, pos):
@@ -148,7 +150,7 @@ class XPS(node.Device):
 
         status = await self.GroupStatusGet(group_name)
         self._group_status[i] = status[1]
-        position = await self.GroupPositionCurrentGet(group_name)
+        position = await self.GroupPositionCurrentGet(group_name, 1)
         self._group_positions[i] = float(position[1])
 
     async def _sendAndReceive(self, command):
