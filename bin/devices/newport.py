@@ -1,4 +1,4 @@
-"""Smartlink device for XPS-Q8 Motion Controller."""
+"""Smartlink device for Newport Motion Controller."""
 # XPS Python class
 #
 # for XPS-Q8 Firmware Precision Platform V1.4.x
