@@ -8,14 +8,14 @@ from pathlib import Path  # if you haven't already done so
 root = str(Path(__file__).resolve().parents[1])
 sys.path.append(root)
 
-from devices import XPS_Q8
+from devices import xps_q8
 
 
 def main():
     node = Node("Plasma Mirror Chamber")
     # ports = ['COM1', 'COM3', 'COM8']
 
-    xps = XPS_Q8.XPS(
+    xps = xps_q8.XPS(
         group_names=["Group1", "Group2", "Group3", "Group4", "Group5", "Group6"])
 
     node.add_device(xps)
