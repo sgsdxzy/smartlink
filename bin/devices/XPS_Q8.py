@@ -53,7 +53,7 @@ class XPS(node.Device):
             self.add_update("Positon", "float",
                 lambda: self._group_positions[i], grp=group_name)
             self.add_update("Status", "Int",
-                lambda: self._group_states[i], grp=group_name)
+                lambda: self._group_status[i], grp=group_name)
             self.add_command("Absolute move", "float",
                 lambda pos: ensure_future(self.absolute_move(i, pos)), grp=group_name)
             self.add_command("Relative move", "float",
@@ -72,23 +72,35 @@ class XPS(node.Device):
                 self.fullname, "Unrecognized boolean value: {0}".format(backlash))
 
     async def initialize_all(self):
+        if not self._connected:
+            self.logger.error(self.fullname, "Not connected.")
+            return
         await asyncio.gather(
             *[self.GroupInitialize(group_name) for group_name in self._group_names])
         await self.get_status_all()
 
     async def home_all(self):
+        if not self._connected:
+            self.logger.error(self.fullname, "Not connected.")
+            return
         await asyncio.gather(
             *[self.GroupHomeSearch(group_name) for group_name in self._group_names])
         await self.get_status_all()
         await self.get_positions_all()
 
     async def kill_all(self):
+        if not self._connected:
+            self.logger.error(self.fullname, "Not connected.")
+            return
         await asyncio.gather(
             *[self.GroupKill(group_name) for group_name in self._group_names])
         await self.get_status_all()
 
     async def get_status_all(self):
         """Get group status for all groups."""
+        if not self._connected:
+            self.logger.error(self.fullname, "Not connected.")
+            return
         status = await asyncio.gather(
             *[self.GroupStatusGet(group_name) for group_name in self._group_names])
         for i in range(self._group_num):
@@ -96,6 +108,9 @@ class XPS(node.Device):
 
     async def get_positions_all(self):
         """Get the position for all groups."""
+        if not self._connected:
+            self.logger.error(self.fullname, "Not connected.")
+            return
         positions = await asyncio.gather(
             *[self.GroupPositionCurrentGet(group_name) for group_name in self._group_names])
         for i in range(self._group_num):
