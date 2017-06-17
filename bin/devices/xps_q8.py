@@ -9,6 +9,7 @@
 
 import asyncio
 from asyncio import wait_for, ensure_future
+from concurrent.futures import CancelledError
 
 from smartlink import node
 
@@ -17,7 +18,8 @@ class XPS(node.Device):
     """Smartlink device for XPS-Q8 Motion Controller."""
     # Initialization Function
 
-    def __init__(self, name="XPS-Q8", group_names=[], comp_amount=0.01, loop=None, queue_size=10):
+    def __init__(self, name="XPS-Q8", group_names=[], interval=0.1,
+            comp_amount=0.01, loop=None, queue_size=10):
         """group_names is a list of group names (eg. Group1) currently in use."""
         super().__init__(name)
         self._loop = loop or asyncio.get_event_loop()
@@ -29,6 +31,8 @@ class XPS(node.Device):
         self._queue = asyncio.Queue()
 
         # XPS-Q8 states
+        self._interval = interval
+        self._query_task = None
         self._comp_amount = comp_amount
         self._backlash = False
         self._group_names = group_names
@@ -73,13 +77,26 @@ class XPS(node.Device):
             self.logger.error(
                 self.fullname, "Unrecognized boolean value: {0}".format(backlash))
 
+    async def _query(self):
+        """Periodically query group position and status."""
+        try:
+            for i in range(self._group_num):
+                group_name = self._group_names[i]
+                status = await self.GroupStatusGet(group_name)
+                self._group_status[i] = status[1]
+                position = await self.GroupPositionCurrentGet(group_name, 1)
+                self._group_positions[i] = float(position[1])
+            await asyncio.sleep(self._interval)
+        except CancelledError:
+            pass
+
     async def initialize_all(self):
         if not self._connected:
             self.logger.error(self.fullname, "Not connected.")
             return
         await asyncio.gather(
             *[self.GroupInitialize(group_name) for group_name in self._group_names])
-        await self.get_status_all()
+        # await self.get_status_all()
 
     async def home_all(self):
         if not self._connected:
@@ -87,8 +104,8 @@ class XPS(node.Device):
             return
         await asyncio.gather(
             *[self.GroupHomeSearch(group_name) for group_name in self._group_names])
-        await self.get_status_all()
-        await self.get_positions_all()
+        # await self.get_status_all()
+        # await self.get_positions_all()
 
     async def kill_all(self):
         if not self._connected:
@@ -96,7 +113,7 @@ class XPS(node.Device):
             return
         await asyncio.gather(
             *[self.GroupKill(group_name) for group_name in self._group_names])
-        await self.get_status_all()
+        # await self.get_status_all()
 
     async def get_status_all(self):
         """Get group status for all groups."""
@@ -131,10 +148,10 @@ class XPS(node.Device):
             else:
                 await self.GroupMoveAbsolute(group_name, [pos])
 
-        status = await self.GroupStatusGet(group_name)
-        self._group_status[i] = status[1]
-        position = await self.GroupPositionCurrentGet(group_name, 1)
-        self._group_positions[i] = float(position[1])
+        # status = await self.GroupStatusGet(group_name)
+        # self._group_status[i] = status[1]
+        # position = await self.GroupPositionCurrentGet(group_name, 1)
+        # self._group_positions[i] = float(position[1])
 
     async def relative_move(self, i, pos):
         group_name = self._group_names[i]
@@ -148,10 +165,10 @@ class XPS(node.Device):
             else:
                 await self.GroupMoveRelative(group_name, [pos])
 
-        status = await self.GroupStatusGet(group_name)
-        self._group_status[i] = status[1]
-        position = await self.GroupPositionCurrentGet(group_name, 1)
-        self._group_positions[i] = float(position[1])
+        # status = await self.GroupStatusGet(group_name)
+        # self._group_status[i] = status[1]
+        # position = await self.GroupPositionCurrentGet(group_name, 1)
+        # self._group_positions[i] = float(position[1])
 
     async def _sendAndReceive(self, command):
         """Send command and get return."""
@@ -209,11 +226,13 @@ class XPS(node.Device):
             self.close_connection()
             return
 
-        await self.get_status_all()
-        await self.get_positions_all()
+        self._query_task = ensure_future(self._query())
 
     def close_connection(self):
         self._connected = False
+        if self._query_task is not None:
+            self._query_task.cancel()
+            self._query_task = None
         for readwriter in self._readwriters:
             readwriter[1].close()
         self._readwriters.clear()

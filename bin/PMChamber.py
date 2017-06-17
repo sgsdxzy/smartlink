@@ -20,7 +20,7 @@ def main():
 
     node.add_device(xps)
 
-    #ensure_future(xps.open_connection("192.168.1.168", 5001))
+    ensure_future(xps.open_connection("192.168.254.254", 5001))
 
     loop = asyncio.get_event_loop()
     server = NodeServer(node, interval=0.2, loop=loop)
