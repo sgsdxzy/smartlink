@@ -188,6 +188,14 @@ class DG645(node.Device):
                 self.logger.error(self.fullname, "Read timeout.")
                 self.close_port()
                 return b""
+            except asyncio.IncompleteReadError:
+                self.logger.error(self.fullname, "Connection lost while reading.")
+                self.close_port()
+                return b""
+            except asyncio.LimitOverrunError:
+                self.logger.error(self.fullname, "Read buffer overrun.")
+                self.close_port()
+                return b""
         if response == b"":
             # Connection is closed
             self.logger.error(self.fullname, "Connection lost.")

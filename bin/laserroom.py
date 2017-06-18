@@ -16,13 +16,7 @@ class ShutterSC300(zolix.SC300):
 
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
-        if self._ports:
-            self.add_update("Connection", "bool",
-                            lambda: self._connected, grp="")
-            port_ext_args = ';'.join(self._ports)
-            self.add_command("Connect", "enum", self.connect_to_port,
-                             ext_args=port_ext_args, grp="")
-            self.add_command("Disconnect", "", self.close_port, grp="")
+        super()._init_smartlink()
 
         self.add_update("Status", "bool", self.is_shutter_open, grp="Shutter")
         self.add_update("Moving", "bool", lambda: self._moving, grp="Shutter")
@@ -30,34 +24,9 @@ class ShutterSC300(zolix.SC300):
         self.add_command("Open", "", self.open_shutter, grp="Shutter")
         self.add_command("Close", "", self.close_shutter, grp="Shutter")
 
-    def handle_response(self, res):
-        """Handle response from SC300."""
-        if not self._verified:
-            if res.find(b"SC300") != -1:
-                self._verified = True
-                # Home Y axis
-                self._write(b"HY")
-                return
-            else:
-                self.logger.error(
-                    self.fullname, "Connected device is not SC300.")
-                self.close_port()
-                return
-        if res == b"ER":
-            self.logger.error(self.fullname, "Error reported by device.")
-            return
-        try:
-            axis = res[1]
-            pos = res[3:]
-            if axis == self.Y[0]:
-                self._y = int(pos)
-            else:
-                self.logger.error(
-                    self.fullname, "Unrecognized response: {0}".format(res.decode()))
-            self._moving = '0'
-        except (ValueError, IndexError):
-            self.logger.error(
-                self.fullname, "Unrecognized response: {0}".format(res.decode()))
+    async def open_port(self, port):
+        await super().open_port(port)
+        self.zero(self.Y)
 
     def is_shutter_open(self):
         return self._y > 100000

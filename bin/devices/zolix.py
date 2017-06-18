@@ -2,41 +2,11 @@
 
 import asyncio
 from asyncio import ensure_future, wait_for
+from concurrent.futures import CancelledError
 import serial
-from serial_asyncio import create_serial_connection
+from serial_asyncio import open_serial_connection
 
 from smartlink import node
-
-
-class SC300Protocal(asyncio.Protocol):
-    """Asyncio protocal for serial communicaton with SC300."""
-
-    def __init__(self, dev):
-        super().__init__()
-        self._transport = None
-        self._buffer = bytearray()
-        self._dev = dev
-        self.logger = dev.logger
-
-    def connection_made(self, transport):
-        self._transport = transport
-
-    def data_received(self, data):
-        self._buffer.extend(data)
-        start = 0
-        while True:
-            end = self._buffer.find(b'\r', start)
-            if end == -1:
-                self._buffer = self._buffer[start:]
-                return
-            self._dev.handle_response(self._buffer[start:end])
-            start = end + 1
-
-    def connection_lost(self, exc):
-        if not self._dev.peaceful_disconnect:
-            self.logger.error(self.fullname, "Connection lost.")
-        self._dev.close_port()
-        self._dev.peaceful_disconnect = True
 
 
 class SC300(node.Device):
@@ -51,12 +21,11 @@ class SC300(node.Device):
         self._loop = loop or asyncio.get_event_loop()
 
         self._connected = False
-        self._verified = False
-        self._transport = None
-        self._protocal = None
+        self._reader = None
+        self._writer = None
+        self._handle_res_task = None
         self._sep = b'\r'   # <CR>
-        self._timeout = 5
-        self.peaceful_disconnect = False
+        self._timeout = 30
 
         # SC300 status
         self._moving = '0'
@@ -75,8 +44,6 @@ class SC300(node.Device):
             self.add_command("Connect", "enum", self.connect_to_port,
                              ext_args=port_ext_args, grp="")
             self.add_command("Disconnect", "", self.close_port, grp="")
-
-        # TODO: Add full SC300 controls
 
     def connect_to_port(self, port_num):
         """Connect to port_num-th port in self._ports."""
@@ -97,11 +64,10 @@ class SC300(node.Device):
         bytesize = serial.EIGHTBITS
         stopbits = serial.STOPBITS_ONE
         parity = serial.PARITY_NONE
-        protocal = SC300Protocal(self)
         try:
-            self._transport, self._protocal = await wait_for(
-                create_serial_connection(self._loop, lambda: protocal, port, baudrate=baudrate, bytesize=bytesize,
-                                         parity=parity, stopbits=stopbits), timeout=self._timeout)
+            self._reader, self._writer = await wait_for(
+                open_serial_connection(url=port, baudrate=baudrate, bytesize=bytesize,
+                                       parity=parity, stopbits=stopbits), timeout=self._timeout)
         except asyncio.TimeoutError:
             self.logger.error(self.fullname, "Connection timeout.")
             return
@@ -110,61 +76,90 @@ class SC300(node.Device):
                 self.fullname, "Failed to open port {port}".format(port=port))
             return
         self._connected = True
-        self.peaceful_disconnect = False
+
         # Identify SC300
-        self._verified = False
         self._write(b"VE")
+        res = await self._read()
+        if res.find(b"SC300") == -1:
+            self.logger.error(
+                self.fullname, "Connected device is not SC300.")
+            self.close_port()
+            return
+        self._handle_res_task = ensure_future(self._handle_response())
 
     def close_port(self):
         """Close serial port."""
         if not self._connected:
             # self.logger.error(self.fullname, "Not connected.")
             return
-        self.peaceful_disconnect = True
-        self._transport.close()
-        self._transport = None
-        self._protocal = None
         self._connected = False
-        self._verified = False
+        if self._handle_res_task is not None:
+            self._handle_res_task.cancel()
+            self._handle_res_task = None
+        self._writer.close()
+        self._reader = None
+        self._writer = None
 
     def _write(self, cmd):
         """Write cmd and sep to SC300."""
         if not self._connected:
             self.logger.error(self.fullname, "Not connected.")
             return
-        self._transport.write(cmd)
-        self._transport.write(self._sep)
+        self._writer.write(cmd)
+        self._writer.write(self._sep)
 
-    def handle_response(self, res):
-        """Handle response from SC300."""
-        if not self._verified:
-            if res.find(b"SC300") != -1:
-                self._verified = True
-                return
-            else:
-                self.logger.error(
-                    self.fullname, "Connected device is not SC300.")
-                self.close_port()
-                return
-        if res == b"ER":
-            self.logger.error(self.fullname, "Error reported by device.")
-            return
+    async def _read(self):
+        """Read response from SC300."""
+        if not self._connected:
+            self.logger.error(self.fullname, "Not connected.")
+            return b""
         try:
-            axis = res[1]
-            pos = res[3:]
-            if axis == self.X[0]:
-                self._x = int(pos)
-            elif axis == self.Y[0]:
-                self._y = int(pos)
-            elif axis == self.Z[0]:
-                self._z = int(pos)
-            else:
-                self.logger.error(
-                    self.fullname, "Unrecognized response: {0}".format(res.decode()))
-            self._moving = '0'
-        except (ValueError, IndexError):
-            self.logger.error(
-                self.fullname, "Unrecognized response: {0}".format(res.decode()))
+            response = await wait_for(self._reader.readuntil(b"\r"), timeout=self._timeout)
+        except asyncio.TimeoutError:
+            self.logger.error(self.fullname, "Read timeout.")
+            self.close_port()
+            return b""
+        except asyncio.IncompleteReadError:
+            self.logger.error(self.fullname, "Connection lost while reading.")
+            self.close_port()
+            return b""
+        except asyncio.LimitOverrunError:
+            self.logger.error(self.fullname, "Read buffer overrun.")
+            self.close_port()
+            return b""
+        if response == b"":
+            # Connection is closed
+            self.logger.error(self.fullname, "Connection lost.")
+            self.close_port()
+            return b""
+        return response[:-1]
+
+    async def handle_response(self, res):
+        """Handle response from SC300."""
+        try:
+            while True:
+                res = await self._read()
+                if res == b"ER":
+                    self.logger.error(self.fullname, "Error reported by device.")
+                    continue
+                try:
+                    axis = res[1]
+                    pos = res[3:]
+                    if axis == self.X:
+                        self._x = int(pos)
+                    elif axis == self.Y:
+                        self._y = int(pos)
+                    elif axis == self.Z:
+                        self._z = int(pos)
+                    else:
+                        self.logger.error(
+                            self.fullname, "Unrecognized response: {0}".format(res.decode()))
+                    self._moving = '0'
+                except (ValueError, IndexError):
+                    self.logger.error(
+                        self.fullname, "Unrecognized response: {0}".format(res.decode()))
+        except CancelledError:
+            return
 
     def zero(self, axis):
         self._write(b'H' + axis)

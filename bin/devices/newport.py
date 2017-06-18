@@ -80,15 +80,16 @@ class XPS(node.Device):
     async def _query(self):
         """Periodically query group position and status."""
         try:
-            for i in range(self._group_num):
-                group_name = self._group_names[i]
-                status = await self.GroupStatusGet(group_name)
-                self._group_status[i] = status[1]
-                position = await self.GroupPositionCurrentGet(group_name, 1)
-                self._group_positions[i] = float(position[1])
-            await asyncio.sleep(self._interval)
+            while True:
+                for i in range(self._group_num):
+                    group_name = self._group_names[i]
+                    status = await self.GroupStatusGet(group_name)
+                    self._group_status[i] = status[1]
+                    position = await self.GroupPositionCurrentGet(group_name, 1)
+                    self._group_positions[i] = float(position[1])
+                await asyncio.sleep(self._interval)
         except CancelledError:
-            pass
+            return
 
     async def initialize_all(self):
         if not self._connected:
@@ -184,6 +185,14 @@ class XPS(node.Device):
             ret = await wait_for(reader.readuntil(b",EndOfAPI"), timeout=self._timeout)
         except asyncio.TimeoutError:
             self.logger.error(self.fullname, "Read timeout.")
+            self.close_connection()
+            return (-2, '')
+        except asyncio.IncompleteReadError:
+            self.logger.error(self.fullname, "Connection lost while reading.")
+            self.close_connection()
+            return (-2, '')
+        except asyncio.LimitOverrunError:
+            self.logger.error(self.fullname, "Read buffer overrun.")
             self.close_connection()
             return (-2, '')
         self._queue.put_nowait(readwriter)
