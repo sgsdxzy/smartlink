@@ -19,7 +19,7 @@ class XPS(node.Device):
     # Initialization Function
 
     def __init__(self, name="XPS-Q8", group_names=[], interval=0.1,
-            comp_amount=0.01, loop=None, queue_size=10):
+            loop=None, queue_size=10):
         """group_names is a list of group names (eg. Group1) currently in use."""
         super().__init__(name)
         self._loop = loop or asyncio.get_event_loop()
@@ -33,7 +33,7 @@ class XPS(node.Device):
         # XPS-Q8 states
         self._interval = interval
         self._query_task = None
-        self._comp_amount = comp_amount
+        self._comp_amount = 0.01
         self._backlash = False
         self._group_names = group_names
         self._group_num = len(self._group_names)
@@ -46,8 +46,9 @@ class XPS(node.Device):
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
         # TODO: connection and device status
-        self.add_command("Backlash Compensation", "bool",
-            self.set_backlash, grp="")
+        # self.add_update("Backlash Compensation", "float", lambda: self._comp_amount, grp="")
+        self.add_command("Backlash Compensation", "float", self.set_comp_amount, grp="")
+        self.add_command("Enable", "bool", self.set_backlash, grp="")
         self.add_command("Initialize All", "", self.initialize_all, grp="")
         self.add_command("Home All", "", self.home_all, grp="")
         self.add_command("Kill All", "", self.kill_all, grp="")
@@ -74,6 +75,13 @@ class XPS(node.Device):
         else:
             self.logger.error(
                 self.fullname, "Unrecognized boolean value: {0}".format(backlash))
+
+    def set_comp_amount(self, amount):
+        try:
+            self._comp_amount = float(amount)
+        except ValueError:
+            self.logger.error(
+                self.fullname, "Invalid backlash compensation amount: {0}".format(amount))
 
     async def _query(self):
         """Periodically query group position and status."""
