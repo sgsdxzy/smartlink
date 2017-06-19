@@ -60,8 +60,6 @@ class XPS(node.Device):
                 lambda i=i: self._group_status[i], grp=group_name)
             self.add_command("Absolute move", "float",
                 lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
-            self.add_command("Absolute move", "float",
-                lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
             self.add_command("Relative move", "float",
                 lambda pos, i=i: ensure_future(self.relative_move(i, pos)), grp=group_name)
             self.add_command("Relative move", "float",
@@ -162,7 +160,7 @@ class XPS(node.Device):
             target_pos = float(pos)
             if target_pos < 0:
                 await self.GroupMoveRelative(group_name, [str(target_pos - self._comp_amount)])
-                await self.GroupMoveRelative(group_name, str(self._comp_amount))
+                await self.GroupMoveRelative(group_name, [str(self._comp_amount)])
             else:
                 await self.GroupMoveRelative(group_name, [pos])
 

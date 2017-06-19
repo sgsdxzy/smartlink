@@ -1,4 +1,4 @@
-"""Smartlink device for Alicat Digital Flow Controllers."""
+"""Smartlink device for PLC Stepper Motor COntroller."""
 
 import asyncio
 from asyncio import ensure_future, wait_for
@@ -9,8 +9,8 @@ from serial_asyncio import open_serial_connection
 from smartlink import node
 
 
-class PCD(node.Device):
-    """Smartlink device for Alicat PCD Digital Flow Controllers."""
+class PLC(node.Device):
+    """Smartlink device for PLC Stepper Motor COntroller."""
 
     def __init__(self, name="PCD", address=b'A', ports=None, loop=None):
         """`ports` is a list of avaliable port names. If it is None, no serial

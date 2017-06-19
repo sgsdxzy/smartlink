@@ -114,11 +114,7 @@ class SC300(node.Device):
             self.logger.error(self.fullname, "Not connected.")
             return b""
         try:
-            response = await wait_for(self._reader.readuntil(b"\r"), timeout=self._timeout)
-        except asyncio.TimeoutError:
-            self.logger.error(self.fullname, "Read timeout.")
-            self.close_port()
-            return b""
+            response = await self._reader.readuntil(b"\r")
         except asyncio.IncompleteReadError:
             self.logger.error(self.fullname, "Connection lost while reading.")
             self.close_port()
@@ -134,7 +130,7 @@ class SC300(node.Device):
             return b""
         return response[:-1]
 
-    async def handle_response(self, res):
+    async def _handle_response(self):
         """Handle response from SC300."""
         try:
             while True:
@@ -143,7 +139,7 @@ class SC300(node.Device):
                     self.logger.error(self.fullname, "Error reported by device.")
                     continue
                 try:
-                    axis = res[1]
+                    axis = res[1:2]
                     pos = res[3:]
                     if axis == self.X:
                         self._x = int(pos)

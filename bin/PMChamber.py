@@ -16,7 +16,7 @@ def main():
     # ports = ['COM1', 'COM3', 'COM8']
 
     xps = newport.XPS(
-        group_names=["Group1", "Group2", "Group3", "Group4", "Group5", "Group6"])
+        group_names=["Group1", "Group2", "Group3", "Group4", "Group5", "Group7"])
 
     node.add_device(xps)
 
