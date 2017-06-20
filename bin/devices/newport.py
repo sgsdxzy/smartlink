@@ -149,7 +149,7 @@ class XPS(node.Device):
         else:
             target_pos = float(pos)
             current_pos = self._group_positions[i]
-            if target_pos < current_pos:
+            if target_pos - current_pos < self._comp_amount:
                 await self.GroupMoveAbsolute(group_name, [str(target_pos - self._comp_amount)])
                 await self.GroupMoveAbsolute(group_name, [pos])
             else:
@@ -166,7 +166,7 @@ class XPS(node.Device):
             await self.GroupMoveRelative(group_name, [pos])
         else:
             target_pos = float(pos)
-            if target_pos < 0:
+            if target_pos < self._comp_amount:
                 await self.GroupMoveRelative(group_name, [str(target_pos - self._comp_amount)])
                 await self.GroupMoveRelative(group_name, [str(self._comp_amount)])
             else:
