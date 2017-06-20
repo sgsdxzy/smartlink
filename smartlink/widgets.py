@@ -14,7 +14,7 @@ class StrWidget(QLineEdit):
 
     def __init__(self, ext_arg=None):
         super().__init__()
-        self.setMinimumWidth(30)
+        self.setMinimumWidth(40)
         if ext_arg is not None:
             self.setText(ext_arg)
 
@@ -23,7 +23,6 @@ class StrWidget(QLineEdit):
 
     def set_arg(self, arg):
         self.setText(arg)
-        self.updateGeometry()
 
 
 class UStrWidget(StrWidget):
@@ -155,10 +154,8 @@ class UEnumWidget(UStrWidget):
         try:
             index = int(arg)
             self.setText(self._items[index])
-            self.updateGeometry()
         except (ValueError, IndexError):
             self.setText("Unknown")
-            self.updateGeometry()
 
     def get_arg(self):
         return self.text()
