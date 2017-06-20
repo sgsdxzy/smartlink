@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import ensure_future, wait_for
+from asyncio import wait_for
 import serial
 from serial_asyncio import open_serial_connection
 
@@ -38,18 +38,33 @@ class ReactiveSerialDevice(node.Device):
                              ext_args=port_ext_args, grp="")
             self.add_command("Disconnect", "", self.close_port, grp="")
 
-    def connect_to_port(self, port_num):
+    async def connect_to_port(self, port_num):
         """Connect to port_num-th port in self._ports."""
         try:
             index = int(port_num)
-            ensure_future(self.open_port(self._ports[index]))
+            await self.open_port(self._ports[index])
         except (ValueError, IndexError):
             self.logger.error(
                 self.fullname, "No such port number: {0}".format(port_num))
 
-    async def open_port(self, port):
-        """Open serial port `port`."""
-        raise NotImplementedError
+    async def open_port(self, port, **kargs):
+        """Open serial port `port`.
+        Returns: True if successful, False otherwise."""
+        if self._connected:
+            self.logger.error(self.fullname, "Already connected.")
+            return False
+        try:
+            self._reader, self._writer = await wait_for(
+                open_serial_connection(url=port, **kargs), timeout=self._timeout)
+        except asyncio.TimeoutError:
+            self.logger.error(self.fullname, "Connection timeout.")
+            return False
+        except (OSError, serial.SerialException):
+            self.logger.exception(
+                self.fullname, "Failed to open port {port}".format(port=port))
+            return False
+        self._connected = True
+        return True
 
     def close_port(self):
         """Close serial port."""

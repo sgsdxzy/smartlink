@@ -1,9 +1,8 @@
 """Smartlink device for Stanford Research Systems."""
 
 import asyncio
-from asyncio import ensure_future, wait_for
+from asyncio import ensure_future
 import serial
-from serial_asyncio import open_serial_connection
 
 import sys
 from pathlib import Path
@@ -17,8 +16,6 @@ class DG645(ReactiveSerialDevice):
     """Smartlink device for DG645 Digital Delay Generator."""
 
     def __init__(self, name="DG645", ports=None):
-        """`ports` is a list of avaliable port names. If it is None, no serial
-        connection management is provided on panel."""
         super().__init__(name, b'\r', b'\r\n', ports, 5)
 
         # Wait for this seconds after a set command to exectute get command
@@ -89,39 +86,29 @@ class DG645(ReactiveSerialDevice):
         self.add_command("H", ["enum", "float"], lambda d, t: ensure_future(self.set_delay('9', d, t)),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
 
-    async def open_port(self, port):
-        """Open serial port `port`"""
-        if self._connected:
-            # self.logger.error(self.fullname, "DG645 is already connected.")
-            return
+    async def open_port(self, port, **kargs):
+        """Open serial port `port`.
+        Returns: True if successful, False otherwise."""
         # Serial port characteristcs
         baudrate = 9600
         bytesize = serial.EIGHTBITS
         stopbits = serial.STOPBITS_ONE
         parity = serial.PARITY_NONE
         rtscts = True
-        try:
-            self._reader, self._writer = await wait_for(
-                open_serial_connection(url=port, baudrate=baudrate, bytesize=bytesize,
-                                       parity=parity, stopbits=stopbits, rtscts=rtscts), timeout=self._timeout)
-        except asyncio.TimeoutError:
-            self.logger.error(self.fullname, "Connection timeout.")
-            return
-        except (OSError, serial.SerialException):
-            self.logger.exception(
-                self.fullname, "Failed to open port {port}".format(port=port))
-            return
-        self._connected = True
+        success = await super().open_port(port, baudrate=baudrate, bytesize=bytesize,
+                               parity=parity, stopbits=stopbits, rtscts=rtscts)
+        if not success:
+            return False
+
         # Identify DG645
         res = await self._write_and_read(b"*IDN?")
         if res.find(b"DG645") == -1:
             self.logger.error(self.fullname, "Connected device is not DG645.")
             self.close_port()
-            return
-        # Reset defaults
-        await self._write(b"*RST")
-
+            return False
+        await self.reset()
         await self._get_initial_update()
+        return True
 
     async def _get_initial_update(self):
         # Initial state update
@@ -130,15 +117,15 @@ class DG645(ReactiveSerialDevice):
         await self.get_prescale_factor()
         await self.get_delays()
 
-    def reset(self):
+    async def reset(self):
         """Reset DG645 to factory default settings."""
-        ensure_future(self._write(b"*RST"))
+        await self._write(b"*RST")
 
-    def trigger(self):
+    async def trigger(self):
         """When the DG645 is configured for single shot triggers, this command initiates a
         single trigger. When it is configured for externally triggered single shots, this
         command arms the DG645 to trigger on the next detected external trigger. """
-        ensure_future(self._write(b"*TRG"))
+        await self._write(b"*TRG")
 
     async def get_advt(self):
         """Query the advanced triggering enable register. If i is '0', advanced

@@ -18,7 +18,7 @@ class XPS(node.Device):
     """Smartlink device for XPS-Q8 Motion Controller."""
     # Initialization Function
 
-    def __init__(self, name="XPS-Q8", group_names=[], interval=0.1,
+    def __init__(self, name="XPS-Q8", group_names=[], interval=0.2,
             loop=None, queue_size=10):
         """group_names is a list of group names (eg. Group1) currently in use."""
         super().__init__(name)

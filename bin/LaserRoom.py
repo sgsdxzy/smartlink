@@ -16,28 +16,30 @@ class ShutterSC300(zolix.SC300):
 
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
-        super()._init_smartlink()
-
-        self.add_update("Status", "bool", self.is_shutter_open, grp="Shutter")
+        self.add_update("M-Shutter", "bool", self.is_shutter_open, grp="Shutter")
         self.add_update("Moving", "bool", lambda: self._moving, grp="Shutter")
         self.add_update("Position", "int", lambda: self._y, grp="Shutter")
-        self.add_command("Open", "", self.open_shutter, grp="Shutter")
-        self.add_command("Close", "", self.close_shutter, grp="Shutter")
 
-    async def open_port(self, port):
-        await super().open_port(port)
-        self.zero(self.Y)
+    async def open_port(self, port, **kargs):
+        """Open serial port `port`.
+        Returns: True if successful, False otherwise."""
+        # Serial port characteristcs
+        success = await super().open_port(port)
+        if not success:
+            return False
+        await self.zero(self.Y)
+        return True
 
     def is_shutter_open(self):
         return self._y > 100000
 
-    def open_shutter(self):
+    async def open_shutter(self):
         if self._y < 100000:
-            self.relative_move(self.Y, 120000 - self._y)
+            await self.relative_move(self.Y, 120000 - self._y)
 
-    def close_shutter(self):
+    async def close_shutter(self):
         if self._y > 60000:
-            self.relative_move(self.Y, 0 - self._y)
+            await self.relative_move(self.Y, 0 - self._y)
 
 
 class SingleShotController(uniblitz.VMMD3):
@@ -47,7 +49,7 @@ class SingleShotController(uniblitz.VMMD3):
         """`dg645` and `sc300` are the associated DG645 and SC300
         to perform single shot.
         """
-        super().__init__(NO=True, ports=ports)
+        super().__init__(name="Shutter Group", NO=True, ports=ports)
         self._dg645 = dg645
         self._sc300 = sc300
         self._ports = ports
@@ -65,41 +67,41 @@ class SingleShotController(uniblitz.VMMD3):
                              ext_args=port_ext_args, grp="")
             self.add_command("Disconnect", "", self.close_port, grp="")
 
-        self.add_update("Shutter", "bool", lambda: self._ch1, grp="Shutter")
-        self.add_command("Open", "", self.open_shutter_safe, grp="Shutter")
-        self.add_command("Close", "", self.close_shutter_safe, grp="Shutter")
-
         self.add_update(
             "Mode", "bool", lambda: self._firing_mode, grp="FIRING CONTROL")
-        self.add_update("DANGER: Pay Attention to", "str",
-                        lambda: "Shutter states", grp="FIRING CONTROL")
         self.add_command("Switch Firing Mode", "bool",
                          self.enable_firing_mode, grp="FIRING CONTROL")
         self.add_command("FIRE!", "", self.fire_single_shot,
                          grp="FIRING CONTROL")
 
-    def open_shutter_safe(self):
-        if self._firing_mode == '1':
-            self.logger.error(
-                self.fullname, "Manual operation of shutter is prohibited in firing mode.")
-            return
-        self.open_shutter('1')
+        self.add_update("S-Shutter", "bool", lambda: self._ch1, grp="Shutter")
+        self.add_command("Open", "", self.open_shutter_group, grp="Shutter")
+        self.add_command("Close", "", self.close_shutter_group, grp="Shutter")
 
-    def close_shutter_safe(self):
+    async def open_shutter_group(self):
         if self._firing_mode == '1':
-            self.logger.error(
-                self.fullname, "Manual operation of shutter is prohibited in firing mode.")
+            await self._sc300.open_shutter()
             return
         self.close_shutter('1')
+        await self._sc300.open_shutter()
+        self.open_shutter('1')
 
-    def enable_firing_mode(self, mode):
+    async def close_shutter_group(self):
+        if self._firing_mode == '1':
+            await self._sc300.close_shutter()
+            return
+        self.close_shutter('1')
+        await self._sc300.close_shutter()
+        self.open_shutter('1')
+
+    async def enable_firing_mode(self, mode):
         if self._firing_mode == mode:
+            return
+        if not self._connected:
+            self.logger.error(self.fullname, "Not connected.")
             return
 
         if mode == '1':
-            if not self._connected:
-                self.logger.error(self.fullname, "Not connected.")
-                return
             if not self._dg645:
                 self.logger.error(
                     self.fullname, "DG645 must be present to perform single shot.")
@@ -108,24 +110,19 @@ class SingleShotController(uniblitz.VMMD3):
                 self.logger.error(self.fullname,
                                   'Trigger mode for DG645 must be set to "Single shot external rising edges".')
                 return
-            if self._sc300.is_shutter_open():
-                self.logger.error(
-                    self.fullname, "You must close M-Shutter before enabling firing mode.")
-                return
+            await self._sc300.close_shutter()
             self.close_shutter('1')
             self._firing_mode = '1'
         elif mode == '0':
-            if self._sc300.is_shutter_open():
-                self.logger.error(
-                    self.fullname, "You must close M-Shutter before disabling firing mode.")
-                return
+            await self._sc300.close_shutter()
+            self.open_shutter('1')
             self._firing_mode = '0'
         else:
             self.logger.error(
                 self.fullname, "Unrecognized boolean value: {0}".format(mode))
             return
 
-    def fire_single_shot(self):
+    async def fire_single_shot(self):
         """User must first open zolix SC300 controlled shutter and put
         DG645 in "3 Single shot external rising edges" trigger mode. This
         method will trigger DG645, open shutter after a laser operation cycle,
@@ -134,9 +131,6 @@ class SingleShotController(uniblitz.VMMD3):
             self.logger.error(
                 self.fullname, "FIRE is only possible after enabling firing mode.")
             return
-        ensure_future(self._fire_single_shot())
-
-    async def _fire_single_shot(self):
         await self._dg645._write(b"*TRG")
         await asyncio.sleep(0.2)
         self.open_shutter('1')

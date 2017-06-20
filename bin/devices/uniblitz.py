@@ -41,8 +41,6 @@ class VMMD3(node.Device):
                              ext_args=port_ext_args, grp="")
             self.add_command("Disconnect", "", self.close_port, grp="")
 
-        # TODO: full VMM-D3 controls
-
     def connect_to_port(self, port_num):
         """Connect to port_num-th port in self._ports."""
         try:
