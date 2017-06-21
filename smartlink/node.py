@@ -65,50 +65,93 @@ class Logger:
 
 class Command:
     """Command is the type of operation sent by control to be executed on node."""
-    __slots__ = ["_dev", "id", "name", "_grp", "fullname",
-                 "_sigs", "_func", "_is_coro", "_ext_args", "logger"]
+    __slots__ = ["_dev", "id", "name", "grp", "_fullname",
+                 "_sigs", "_func", "_is_coro", "_ext_args", "_logger"]
 
     def __init__(self, dev, id_, name, sigs, func, ext_args=None, grp=""):
         self._dev = dev
         self.id = id_
         self.name = name
-        self._grp = grp
+        self.grp = grp
         if sigs:
-            self._sigs = args_to_sequence(sigs)
+            self._sigs = list(args_to_sequence(sigs))
         else:
-            self._sigs = None
+            self._sigs = []
         self._func = func
         if asyncio.iscoroutinefunction(func):
             self._is_coro = True
         else:
             self._is_coro = False
         if ext_args:
-            self._ext_args = args_to_sequence(ext_args)
+            self._ext_args = list(args_to_sequence(ext_args))
         else:
-            self._ext_args = None
-        self.reinit()
+            self._ext_args = []
+        self._logger = None
+        self._fullname = None
 
-    def reinit(self):
-        """Call this method after device is added to another node."""
-        if self._grp:
-            self.fullname = '.'.join(
-                (self._dev.fullname, self._grp, self.name))
+    def init_logger(self):
+        self._logger = self._dev._logger
+        if self.grp:
+            self._fullname = '.'.join(
+                (self._dev._fullname, self.grp, self.name))
         else:
-            self.fullname = '.'.join((self._dev.fullname, self.name))
-        self.logger = self._dev.logger
+            self._fullname = '.'.join((self._dev.fullname, self.name))
+
+    def _log_info(self, msg):
+        self._logger.info(self._fullname, msg)
+
+    def _log_error(self, msg):
+        self._logger.error(self._fullname, msg)
+
+    def _log_exception(self, msg):
+        self._logger.exception(self._fullname, msg)
+
+    def _parse_args(self, args):
+        """Convert the sequence of string in args to their corrsponding types
+        according to sigs.
+
+        Retruns: a generator sequence of arguments.
+        """
+        for sig, arg in zip(self._sigs, args):
+            if sig == "int" or sig == "enum":
+                yield int(arg)
+            elif sig == "float":
+                yield float(arg)
+            elif sig == "bool":
+                if arg == "0":
+                    yield False
+                elif arg == "1":
+                    yield True
+                else:
+                    raise ValueError("Invalid boolean value: {0}".format(arg))
+            elif sig == "str":
+                yield arg
+            else:
+                raise NotImplementedError("Unsupported signature type: {0}".format(sig))
+
+    async def _exec_func(self, args):
+        """Wrapper to execute coroutine func."""
+        try:
+            comp_args = self._parse_args(args)
+            await self._func(*comp_args)
+            self._log_info("Executed with arguments: {args}".format(args=' '.join(args)))
+        except Exception:
+            self._log_exception("Failed to execute with arguments: {args}".format(
+                args=' '.join(args)))
 
     def execute(self, link):
         """Call the associated func. If the func is a coroutine, it will be ensure_futured"""
-        try:
-            if self._is_coro:
-                asyncio.ensure_future(self._func(*link.args))
-            else:
-                self._func(*link.args)
-            self.logger.info(self.fullname, "Executing with arguments: {args}".format(
-                args=' '.join(link.args)))
-        except Exception:
-            self.logger.exception(self.fullname, "Failed to execute with arguments: {args}".format(
-                args=' '.join(link.args)))
+        args = link.args
+        if self._is_coro:
+            asyncio.ensure_future(self._exec_func(args))
+        else:
+            try:
+                comp_args = self._parse_args(args)
+                self._func(*comp_args)
+                self._log_info("Executed with arguments: {args}".format(args=' '.join(args)))
+            except Exception:
+                self._log_exception("Failed to execute with arguments: {args}".format(
+                    args=' '.join(args)))
 
     def get_desc(self, dev_link):
         """Generate a description link to describe this Command, then append it to dev_link.
@@ -119,11 +162,9 @@ class Command:
         link.type = link_pb2.Link.COMMAND
         link.id = self.id
         link.name = self.name
-        link.group = self._grp
-        if self._sigs is not None:
-            link.sigs.extend(self._sigs)
-        if self._ext_args is not None:
-            link.args.extend(self._ext_args)
+        link.group = self.grp
+        link.sigs.extend(self._sigs)
+        link.args.extend(self._ext_args)
         return link
 
 
@@ -131,35 +172,44 @@ class Update:
     """Update is the type of operation executed on node to display the result on
     control.
     """
-    __slots__ = ["_dev", "id", "name", "_grp", "fullname",
-                 "_sigs", "_func", "_ext_args", "logger", "_old"]
+    __slots__ = ["_dev", "id", "name", "grp", "_fullname",
+                 "_sigs", "_func", "_ext_args", "_logger", "_old"]
 
     def __init__(self, dev, id_, name, sigs, func, ext_args=None, grp=""):
         self._dev = dev
         self.id = id_
         self.name = name
-        self._grp = grp
+        self.grp = grp
         if sigs:
-            self._sigs = args_to_sequence(sigs)
+            self._sigs = list(args_to_sequence(sigs))
         else:
-            self._sigs = None
+            self._sigs = []
         self._func = func
         if ext_args:
-            self._ext_args = args_to_sequence(ext_args)
+            self._ext_args = list(args_to_sequence(ext_args))
         else:
-            self._ext_args = None
-        self.reinit()
+            self._ext_args = []
+        self._logger = None
+        self._fullname = None
 
         self._old = None
 
-    def reinit(self):
-        """Call this method after device is added to another node."""
-        if self._grp:
-            self.fullname = '.'.join(
-                (self._dev.fullname, self._grp, self.name))
+    def init_logger(self):
+        self._logger = self._dev._logger
+        if self.grp:
+            self._fullname = '.'.join(
+                (self._dev._fullname, self.grp, self.name))
         else:
-            self.fullname = '.'.join((self._dev.fullname, self.name))
-        self.logger = self._dev.logger
+            self._fullname = '.'.join((self._dev._fullname, self.name))
+
+    def _log_info(self, msg):
+        self._logger.info(self._fullname, msg)
+
+    def _log_error(self, msg):
+        self._logger.error(self._fullname, msg)
+
+    def _log_exception(self, msg):
+        self._logger.exception(self._fullname, msg)
 
     def get_update(self, dev_link):
         """Execute the associated func and if the result is different from old,
@@ -167,9 +217,10 @@ class Update:
 
         Returns: the created link_pb2.Link if has new result or None
         """
-        if self._sigs:
-            try:
-                new = self._func()
+        try:
+            new = self._func()
+            if self._sig:
+                # Only send the update if signature is non-empty
                 if new == self._old or None:
                     return None
                 else:
@@ -178,38 +229,47 @@ class Update:
                     link.id = self.id
                     link.args.extend(args_to_sequence(new))
                     return link
-            except Exception:
-                self.logger.exception(self.fullname, "Failed to update.")
+            else:
+                return None
+        except Exception:
+            self._log_exception("Failed to update.")
 
     def get_full_update(self, dev_link):
         """Execute the associated func, wrap the result in a link_pb2.Link and
         append it to dev_link.
 
-        Returns: the created link_pb2.Link
+        Returns: the created link_pb2.Link or None if empty
         """
         try:
             new = self._func()
-            link = dev_link.links.add()
-            link.id = self.id
-            link.args.extend(args_to_sequence(new))
-            return link
+            if self._sig:
+                # Only send the update if signature is non-empty
+                link = dev_link.links.add()
+                link.id = self.id
+                link.args.extend(args_to_sequence(new))
+                return link
+            else:
+                return None
         except Exception:
-            self.logger.exception(self.fullname, "Failed to update.")
+            self._log_exception("Failed to update.")
 
     def get_desc(self, dev_link):
         """Generate a description link to describe this Update, then append it to dev_link.
 
         Returns: the created link_pb2.Link or None is signature is empty
         """
-        link = dev_link.links.add()
-        link.type = link_pb2.Link.UPDATE
-        link.id = self.id
-        link.name = self.name
-        link.group = self._grp
-        if self._sigs is not None:
+        if self._sig:
+            # Only send the update if signature is non-empty
+            link = dev_link.links.add()
+            link.type = link_pb2.Link.UPDATE
+            link.id = self.id
+            link.name = self.name
+            link.group = self.grp
             link.sigs.extend(self._sigs)
-        if self._ext_args is not None:
             link.args.extend(self._ext_args)
+            return link
+        else:
+            return None
 
 
 class Device:
@@ -220,29 +280,33 @@ class Device:
     and logging.
     """
 
-    def __init__(self, name, node=None, id_=None):
+    def __init__(self, name):
         self.name = name
-        self.id = id_
-        if node is None:
-            self._node = None
-            self.fullname = name
-            self.logger = None
-        else:
-            self._node = node
-            self.reinit()
+        self.id = None
+        self._node = None
+        self._fullname = name
+        self._logger = None
 
         self._groups = [""]
         self._commands = []
         self._updates = []
 
-    def reinit(self):
-        """Call this method after this device is added to another node."""
-        self.fullname = '.'.join((self._node.fullname, self.name))
-        self.logger = self._node.logger
+    def init_logger(self):
+        self._logger = self._node._logger
+        self._fullname = '.'.join((self._node._fullname, self.name))
         for cmd in self._commands:
-            cmd.reinit()
+            cmd.init_logger()
         for update in self._updates:
-            update.reinit()
+            update.init_logger()
+
+    def _log_info(self, msg):
+        self._logger.info(self._fullname, msg)
+
+    def _log_error(self, msg):
+        self._logger.error(self._fullname, msg)
+
+    def _log_exception(self, msg):
+        self._logger.exception(self._fullname, msg)
 
     def add_group(self, name):
         """Create a new OperationGroup with name."""
@@ -291,19 +355,22 @@ class Device:
     def get_full_update(self, node_link):
         """Get full updates, wrap them in a DeviceLink, then append them to node_link.
 
-        Returns: the created link_pb2.DeviceLink
+        Returns: the created link_pb2.DeviceLink or None if empty
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
         for update in self._updates:
             update.get_full_update(dev_link)
+        if not dev_link.links:  # empty
+            del node_link.dev_links[-1]
+            return None
         return dev_link
 
     def get_desc(self, node_link):
         """Generate a description link to describe this Device, then
         append it to node_link.
 
-        Returns: the created link_pb2.DeviceLink
+        Returns: the created link_pb2.DeviceLink or None if empty
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
@@ -313,6 +380,9 @@ class Device:
             update.get_desc(dev_link)
         for cmd in self._commands:
             cmd.get_desc(dev_link)
+        if not dev_link.links:  # empty
+            del node_link.dev_links[-1]
+            return None
         return dev_link
 
     def execute(self, dev_link):
@@ -325,8 +395,7 @@ class Device:
                 cmd = self._commands[link.id]
                 cmd.execute(link)
             except IndexError:
-                self.logger.error(
-                    self.fullname, "Wrong command id: {id}".format(id=link.id))
+                self._log_error("Wrong command id: {id}".format(id=link.id))
 
 
 class Node:
@@ -337,8 +406,8 @@ class Node:
 
     def __init__(self, name):
         self.name = name
-        self.fullname = name
         self._devices = []
+
         # Logs go to three handlers:
         #   1. All logs are printed to stdout
         #   2. Info logs about executed commands are logged to file
@@ -347,37 +416,37 @@ class Node:
         logfile = os.path.join(
             pdir, "log", "{name}-{date}{ext}".format(name=name, date=str(date.today()), ext='.log'))
         os.makedirs(os.path.join(pdir, 'log'), exist_ok=True)
+        self._fullname = name
         self._log_buffer = []
-        self.logger = Logger(filename=logfile, logbuffer=self._log_buffer)
+        self._logger = Logger(filename=logfile, logbuffer=self._log_buffer)
+
+    def _log_info(self, msg):
+        self._logger.info(self._fullname, msg)
+
+    def _log_error(self, msg):
+        self._logger.error(self._fullname, msg)
+
+    def _log_exception(self, msg):
+        self._logger.exception(self._fullname, msg)
 
     def close(self):
         """Safely close this node object and free its resources.
 
         Returns: None
         """
-        self.logger.close()
+        self._logger.close()
 
     def clear_log(self):
         """Clear all log entries. This method should be called by nodeserver
         when log has been successfully sent."""
         self._log_buffer.clear()
 
-    def create_device(self, name):
-        """Create a new Device with name.
-
-        Returns: the created Device.
-        """
-        id_ = len(self._devices)
-        dev = Device(name, self, id_)
-        self._devices.append(dev)
-        return dev
-
     def add_device(self, dev):
         """Added device `dev` to this node."""
         dev._node = self
         id_ = len(self._devices)
         dev.id = id_
-        dev.reinit()
+        dev.init_logger()
         self._devices.append(dev)
 
     def get_update_link(self):
@@ -422,5 +491,4 @@ class Node:
                 dev = self._devices[dev_link.id]
                 dev.execute(dev_link)
             except IndexError:
-                self.logger.error(
-                    self.fullname, "Wrong device id: {id}".format(id=dev_link.id))
+                self._log_error("Wrong device id: {id}".format(id=dev_link.id))

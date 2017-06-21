@@ -74,7 +74,10 @@ def args_to_sequence(args):
         return
     if args is True:
         yield '1'
-    elif args is False:
+        return
+    if args is False:
         yield '0'
-    else:
-        yield str(args)
+        return
+    if args is None:
+        return
+    yield str(args)
