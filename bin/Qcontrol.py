@@ -199,7 +199,7 @@ class EditableTabWidget(QTabWidget):
             dpanel = DoubleColumnPanel()
             scroll.setWidget(dpanel)
             self.insertTab(index, scroll, tab_title)
-            index += 0
+            index += 1
             dpanel.restore_config(dpanel_config)
 
         self.setCurrentIndex(0)
@@ -232,7 +232,7 @@ class ControlPanel(QMainWindow):
         self._load_config()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._save_config)
-        self._timer.start(60000)
+        self._timer.start(1000)
         self._save_status_action = QAction('Save', self)
         self._save_status_action.setShortcut('Ctrl+S')
         self._save_status_action.setStatusTip('Save status file')
