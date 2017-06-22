@@ -111,7 +111,7 @@ class NodeServer:
                     buf += await client.read(length - len(buf))
                 cmd_link = NodeLink.FromString(buf)
                 self._node.execute(cmd_link)
-        except EndOfStreamError:
+        except (EndOfStreamError, ConnectionError):
             # client disconnects
             logger.info("Client from {ip} disconnected.".format(
                 ip=client.peername))
