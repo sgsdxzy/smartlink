@@ -2,6 +2,7 @@
 from collections.abc import Sequence
 
 from smartlink import varint
+from smartlink.link_pb2 import Link, DeviceLink, NodeLink
 from smartlink.node import Device, Node
 from smartlink.nodeserver import NodeServer
 from smartlink.qtpanel import NodePanel

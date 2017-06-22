@@ -14,7 +14,7 @@ from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 from google.protobuf.message import DecodeError
 from google.protobuf import json_format
 
-from smartlink import StreamReadWriter, write_link, link_pb2, varint
+from smartlink import StreamReadWriter, Link, DeviceLink, NodeLink, write_link, varint
 from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget,
                                UEnumWidget, CStrWidget, CFloatWidget, CIntWidget,
                                CBoolWidget, CEnumWidget)
@@ -151,7 +151,7 @@ class CommandWidget(QFrame):
         """Collect args from widgets and wrap them into a link, then append it
         to dev_link.
 
-        Returns: the created link_pb2.Link or None if invalid
+        Returns: the created Link or None if invalid
         """
         cmds = tuple(widget.get_arg() for widget in self._widget_list)
         if not (cmds and all(cmds)):
@@ -167,14 +167,14 @@ class CommandWidget(QFrame):
         to dev_link. This link also contains additional information such as the
         command's name. This is used for restoring commands.
 
-        Returns: the created link_pb2.Link or None if invalid
+        Returns: the created Link or None if invalid
         """
         cmds = tuple(widget.get_arg() for widget in self._widget_list)
         if not (cmds and all(cmds)):
             return None
         else:
             link = dev_link.links.add()
-            link.type = link_pb2.Link.COMMAND
+            link.type = Link.COMMAND
             link.id = self.id_
             link.name = self.name
             link.group = self.grp
@@ -205,7 +205,7 @@ class CommandWidget(QFrame):
             QTimer.singleShot(1000, self._light_flash)
             return
         else:
-            node_link = link_pb2.NodeLink()
+            node_link = NodeLink()
             dev_link = node_link.dev_links.add()
             dev_link.id = self._dev_panel.id_
             link = dev_link.links.add()
@@ -302,10 +302,10 @@ class UpdateWidget(QFrame):
         """Collect status args from widgets and wrap them into a link,
         then append it to dev_link.
 
-        Returns: the created link_pb2.Link
+        Returns: the created Link
         """
         link = dev_link.links.add()
-        link.type = link_pb2.Link.UPDATE
+        link.type = Link.UPDATE
         link.id = self.id_
         link.name = self.name
         link.group = self.grp
@@ -470,11 +470,11 @@ class DevicePanel(QFrame):
 
         for link in self._desc_link.links:
             try:
-                if link.type == link_pb2.Link.COMMAND:
+                if link.type == Link.COMMAND:
                     widget = CommandWidget(self, link)
                     self._commands[link.id] = widget
                     self._groups[link.group].add_cmd_widget(widget)
-                else:  # link.type == link_pb2.Link.UPDATE:
+                else:  # link.type == Link.UPDATE:
                     widget = UpdateWidget(self, link)
                     self._updates[link.id] = widget
                     self._groups[link.group].add_update_widget(widget)
@@ -520,7 +520,7 @@ class DevicePanel(QFrame):
         """Collect status args from updates and wrap them into a DeviceLink,
         then append it to node_link.
 
-        Returns: the created link_pb2.DeviceLink or None if empty.
+        Returns: the created DeviceLink or None if empty.
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id_
@@ -536,9 +536,9 @@ class DevicePanel(QFrame):
     def _get_status_link(self):
         """Collect status args from updates and wrap them into a DeviceLink.
 
-        Returns: the created link_pb2.DeviceLink or None if empty.
+        Returns: the created DeviceLink or None if empty.
         """
-        dev_link = link_pb2.DeviceLink()
+        dev_link = DeviceLink()
         dev_link.id = self.id_
         dev_link.name = self.name
         for update in self._updates.values():
@@ -575,9 +575,9 @@ class DevicePanel(QFrame):
         This DeviceLink also contains additional information such as the
         device's name. This is used for restoring commands.
 
-        Returns: the created link_pb2.DeviceLink or None if empty.
+        Returns: the created DeviceLink or None if empty.
         """
-        dev_link = link_pb2.DeviceLink()
+        dev_link = DeviceLink()
         dev_link.id = self.id_
         dev_link.name = self.name
         for cmd in self._commands.values():
@@ -603,7 +603,7 @@ class DevicePanel(QFrame):
                     self.fullname, "Failed to open file: {filename}".format(filename=filename))
                 return
             try:
-                cmd_link = link_pb2.DeviceLink()
+                cmd_link = DeviceLink()
                 json_format.Parse(json_link, cmd_link, True)
             except json_format.ParseError:
                 self.logger.error(
@@ -644,7 +644,7 @@ class DevicePanel(QFrame):
     def _apply_all(self):
         """Send all valid commands to nodeserver.
         """
-        node_link = link_pb2.NodeLink()
+        node_link = NodeLink()
         if self.get_cmd(node_link):
             self.send_command(node_link)
 
@@ -665,7 +665,7 @@ class DevicePanel(QFrame):
         """Get commands from the list of Commands and wrap them in a DeviceLink,
         then append it to node_link.
 
-        Returns: the created link_pb2.DeviceLink or None if empty.
+        Returns: the created DeviceLink or None if empty.
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id_
@@ -682,7 +682,7 @@ class DevicePanel(QFrame):
         then append it to node_link. This DeviceLink also contains additional
         information such as the device's name. This is used for restoring commands.
 
-        Returns: the created link_pb2.DeviceLink or None if empty.
+        Returns: the created DeviceLink or None if empty.
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id_
@@ -826,7 +826,7 @@ class NodePanel(QFrame):
             # Parse description link from nodeserver
             length = await varint.decode(self._readwriter)
             buf = await self._readwriter.readexactly(length)
-            self._desc_link = link_pb2.NodeLink.FromString(buf)
+            self._desc_link = NodeLink.FromString(buf)
 
             # Set states
             self._connected = True
@@ -843,7 +843,7 @@ class NodePanel(QFrame):
             while True:
                 length = await varint.decode(self._readwriter)
                 buf = await self._readwriter.readexactly(length)
-                update_link = link_pb2.NodeLink.FromString(buf)
+                update_link = NodeLink.FromString(buf)
                 for record in update_link.logs:
                     self.logger.remote(record)
 
@@ -913,9 +913,9 @@ class NodePanel(QFrame):
     def get_status_link(self):
         """Collect status args from devices and wrap them into a NodeLink.
 
-        Returns: the created link_pb2.NodeLink or None if empty.
+        Returns: the created NodeLink or None if empty.
         """
-        node_link = link_pb2.NodeLink()
+        node_link = NodeLink()
         for dev in self._devices.values():
             dev.get_status(node_link)
         if not node_link.dev_links:  # empty
@@ -977,9 +977,9 @@ class NodePanel(QFrame):
     def get_cmd_link(self):
         """Get commands from the list of devices and wrap them in a NodeLink.
 
-        Returns: the created link_pb2.DeviceLink or None if empty.
+        Returns: the created DeviceLink or None if empty.
         """
-        node_link = link_pb2.NodeLink()
+        node_link = NodeLink()
         for dev in self._devices.values():
             dev.get_cmd(node_link)
         if not node_link.dev_links:  # empty
@@ -992,9 +992,9 @@ class NodePanel(QFrame):
         This NodeLink also contains additional information for
         restoring commands.
 
-        Returns: the created link_pb2.NodeLink or None if empty.
+        Returns: the created NodeLink or None if empty.
         """
-        node_link = link_pb2.NodeLink()
+        node_link = NodeLink()
         node_link.name = self.fullname
         for dev in self._devices.values():
             dev.get_full_cmd(node_link)
@@ -1019,7 +1019,7 @@ class NodePanel(QFrame):
                     self.fullname, "Failed to open file: {filename}".format(filename=filename))
                 return
             try:
-                cmd_link = link_pb2.NodeLink()
+                cmd_link = NodeLink()
                 json_format.Parse(json_link, cmd_link, True)
             except json_format.ParseError:
                 self.logger.error(

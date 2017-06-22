@@ -5,7 +5,7 @@ import traceback
 import asyncio
 from datetime import date, datetime
 
-from smartlink import link_pb2, args_to_sequence
+from smartlink import Link, NodeLink, args_to_sequence
 
 
 class Logger:
@@ -156,10 +156,10 @@ class Command:
     def get_desc(self, dev_link):
         """Generate a description link to describe this Command, then append it to dev_link.
 
-        Returns: the created link_pb2.Link
+        Returns: the created Link
         """
         link = dev_link.links.add()
-        link.type = link_pb2.Link.COMMAND
+        link.type = Link.COMMAND
         link.id = self.id
         link.name = self.name
         link.group = self.grp
@@ -213,9 +213,9 @@ class Update:
 
     def get_update(self, dev_link):
         """Execute the associated func and if the result is different from old,
-        wrap the result in a link_pb2.Link and append it to dev_link.
+        wrap the result in a Link and append it to dev_link.
 
-        Returns: the created link_pb2.Link if has new result or None
+        Returns: the created Link if has new result or None
         """
         try:
             new = self._func()
@@ -235,10 +235,10 @@ class Update:
             self._log_exception("Failed to update.")
 
     def get_full_update(self, dev_link):
-        """Execute the associated func, wrap the result in a link_pb2.Link and
+        """Execute the associated func, wrap the result in a Link and
         append it to dev_link.
 
-        Returns: the created link_pb2.Link or None if empty
+        Returns: the created Link or None if empty
         """
         try:
             new = self._func()
@@ -256,12 +256,12 @@ class Update:
     def get_desc(self, dev_link):
         """Generate a description link to describe this Update, then append it to dev_link.
 
-        Returns: the created link_pb2.Link or None is signature is empty
+        Returns: the created Link or None is signature is empty
         """
         if self._sig:
             # Only send the update if signature is non-empty
             link = dev_link.links.add()
-            link.type = link_pb2.Link.UPDATE
+            link.type = Link.UPDATE
             link.id = self.id
             link.name = self.name
             link.group = self.grp
@@ -341,7 +341,7 @@ class Device:
     def get_update(self, node_link):
         """Get updates, wrap them in a DeviceLink, then append them to node_link.
 
-        Returns: the created link_pb2.DeviceLink or None if empty
+        Returns: the created DeviceLink or None if empty
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
@@ -355,7 +355,7 @@ class Device:
     def get_full_update(self, node_link):
         """Get full updates, wrap them in a DeviceLink, then append them to node_link.
 
-        Returns: the created link_pb2.DeviceLink or None if empty
+        Returns: the created DeviceLink or None if empty
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
@@ -370,7 +370,7 @@ class Device:
         """Generate a description link to describe this Device, then
         append it to node_link.
 
-        Returns: the created link_pb2.DeviceLink or None if empty
+        Returns: the created DeviceLink or None if empty
         """
         dev_link = node_link.dev_links.add()
         dev_link.id = self.id
@@ -452,9 +452,9 @@ class Node:
     def get_update_link(self):
         """Get updates from devices and wrap them in a NodeLink.
 
-        Returns: the created link_pb2.NodeLink
+        Returns: the created NodeLink
         """
-        node_link = link_pb2.NodeLink()
+        node_link = NodeLink()
         for dev in self._devices:
             dev.get_update(node_link)
         node_link.logs.extend(self._log_buffer)
@@ -463,9 +463,9 @@ class Node:
     def get_full_update_link(self):
         """Get full updates from devices and wrap them in a NodeLink.
 
-        Returns: the created link_pb2.NodeLink
+        Returns: the created NodeLink
         """
-        node_link = link_pb2.NodeLink()
+        node_link = NodeLink()
         for dev in self._devices:
             dev.get_full_update(node_link)
         return node_link
@@ -473,9 +473,9 @@ class Node:
     def get_desc_link(self):
         """Generate a description link to describe this Node.
 
-        Returns: the created link_pb2.NodeLink
+        Returns: the created NodeLink
         """
-        node_link = link_pb2.NodeLink()
+        node_link = NodeLink()
         node_link.name = self.name
         for dev in self._devices:
             dev.get_desc(node_link)

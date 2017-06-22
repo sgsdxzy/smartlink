@@ -8,13 +8,14 @@ from collections import OrderedDict
 from PyQt5.QtCore import Qt, QEvent, QTimer
 # from PyQt5.QtGui import
 from PyQt5.QtWidgets import (QTabBar, QTabWidget, QApplication, QLineEdit,
-                             QWidget, QStyleFactory, QHBoxLayout, QVBoxLayout, QMainWindow, QPushButton,
-                             QFrame, QAction, QFileDialog, QScrollArea)
+                             QWidget, QStyleFactory, QHBoxLayout, QVBoxLayout,
+                             QMainWindow, QPushButton, QFrame, QAction,
+                             QFileDialog, QScrollArea)
 
 from google.protobuf import json_format
 
 from quamash import QEventLoop
-from smartlink.qtpanel import NodePanel
+from smartlink import NodePanel
 
 
 class EditableTabBar(QTabBar):

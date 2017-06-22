@@ -4,7 +4,7 @@ from concurrent.futures import CancelledError
 import logging
 
 from smartlink import varint, StreamReadWriter, write_link, write_bin_link
-from smartlink.link_pb2 import NodeLink
+from smartlink import NodeLink
 from google.protobuf.message import DecodeError
 
 logger = logging.getLogger(__name__)
