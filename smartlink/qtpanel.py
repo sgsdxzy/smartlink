@@ -1,7 +1,7 @@
 import os
 import sys
 import asyncio
-from asyncio import ensure_future
+from asyncio import ensure_future, IncompleteReadError
 import traceback
 from datetime import datetime
 
@@ -14,9 +14,10 @@ from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 from google.protobuf.message import DecodeError
 from google.protobuf import json_format
 
-from smartlink import EndOfStreamError, StreamReadWriter, link_pb2, varint
+from smartlink import StreamReadWriter, write_link, link_pb2, varint
 from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget,
-                               UEnumWidget, CStrWidget, CFloatWidget, CIntWidget, CBoolWidget, CEnumWidget)
+                               UEnumWidget, CStrWidget, CFloatWidget, CIntWidget,
+                               CBoolWidget, CEnumWidget)
 
 
 class Logger(QTextEdit):
@@ -824,11 +825,8 @@ class NodePanel(QFrame):
 
             # Parse description link from nodeserver
             length = await varint.decode(self._readwriter)
-            buf = await self._readwriter.read(length)
-            while len(buf) < length:
-                buf += await self._readwriter.read(length - len(buf))
-            node_link = link_pb2.NodeLink.FromString(buf)
-            self._desc_link = node_link
+            buf = await self._readwriter.readexactly(length)
+            self._desc_link = link_pb2.NodeLink.FromString(buf)
 
             # Set states
             self._connected = True
@@ -844,9 +842,7 @@ class NodePanel(QFrame):
             # The work loop
             while True:
                 length = await varint.decode(self._readwriter)
-                buf = await self._readwriter.read(length)
-                while len(buf) < length:
-                    buf += await self._readwriter.read(length - len(buf))
+                buf = await self._readwriter.readexactly(length)
                 update_link = link_pb2.NodeLink.FromString(buf)
                 for record in update_link.logs:
                     self.logger.remote(record)
@@ -858,27 +854,24 @@ class NodePanel(QFrame):
                 self._status_light.setStyleSheet(self.StyleWorking)
                 QTimer.singleShot(100, self._light_flash)
 
-        except EndOfStreamError:
+        except (IncompleteReadError, ConnectionError):
             if self._peaceful_disconnect:
                 msg = "Disconnected from server {ip}".format(ip=self._host_ip)
-                self._status_bar.showMessage(msg)
-                self.logger.info("", msg, "PANEL")
                 self._status_light.setStyleSheet(self.StyleDisabled)
             else:
                 msg = "Server at {ip} dropped connection.".format(
                     ip=self._host_ip)
-                self._status_bar.showMessage(msg)
-                self.logger.error("", msg, "PANEL")
                 self._status_light.setStyleSheet(self.StyleError)
-        except Exception as err:
-            msg = "Lost connection to {ip}.".format(ip=self._host_ip)
-            self._status_bar.showMessage(msg)
+        except DecodeError:
+            msg = "Failed to decode NodeLink."
             self._status_light.setStyleSheet(self.StyleError)
-            if isinstance(err, DecodeError):
-                self.logger.error("", "Failed to decode NodeLink.", "PANEL")
-            else:
-                self.logger.exception("", msg, "PANEL")
+        except Exception:
+            msg = "Unexpected Error!"
+            self._status_light.setStyleSheet(self.StyleError)
         finally:
+            # Log entry
+            self._status_bar.showMessage(msg)
+            self.logger.info("", msg, "PANEL")
             # Make sure the connection is closed
             if self._readwriter is not None:
                 self._readwriter.close()
@@ -933,8 +926,7 @@ class NodePanel(QFrame):
 
     def send_command(self, node_link):
         if self._connected:
-            bin_link = node_link.SerializeToString()
-            self._readwriter.write_bin_link(bin_link)
+            write_link(self._readwriter, node_link)
 
     @pyqtSlot()
     def _save_status(self):

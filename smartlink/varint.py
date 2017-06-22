@@ -22,12 +22,12 @@ def encode(number):
     return buf
 
 
-async def decode(stream):
-    """Read a varint from `stream`"""
+async def decode(reader):
+    """Read a varint from StreamReader `reader`"""
     shift = 0
     result = 0
     while True:
-        i = ord(await stream.read(1))
+        i = ord(await reader.readexcatly(1))
         result |= (i & 0x7f) << shift
         shift += 7
         if not (i & 0x80):

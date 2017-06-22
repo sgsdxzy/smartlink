@@ -4,11 +4,6 @@ from collections.abc import Sequence
 from smartlink import varint
 
 
-class EndOfStreamError(EOFError):
-    """Raised when the ther side closed connection."""
-    pass
-
-
 class ProtocalError(RuntimeError):
     """Raised when the other side of connection does not speak smartlink
     protocal."""
@@ -17,36 +12,68 @@ class ProtocalError(RuntimeError):
 
 class StreamReadWriter:
     """Class for storing the StreaReader and StreamWriter pair"""
-    __slots__ = ["_reader", "_writer"]
+    __slots__ = ["reader", "writer"]
 
     def __init__(self, reader, writer):
-        self._reader = reader
-        self._writer = writer
-
-    @property
-    def peername(self):
-        return self._writer.transport.get_extra_info('peername')
+        self.reader = reader
+        self.writer = writer
 
     async def read(self, n=-1):
-        data = await self._reader.read(n)
-        if data == b'':
-            raise EndOfStreamError
-        return data
+        return await self.reader.read(n)
 
-    def write(self, data):
-        self._writer.write(data)
+    async def readline(self):
+        return await self.reader.readline()
 
-    def write_bin_link(self, bin_link):
-        """Write a varint representing the length of the serialized link, then
-        write the link to writer.
+    async def readexactly(self, n):
+        return await self.reader.readexactly(n)
 
-        Returns: None.
-        """
-        self._writer.write(varint.encode(len(bin_link)))
-        self._writer.write(bin_link)
+    async def readuntil(self, separator=b'\n'):
+        return await self.reader.readuntil(separator)
+
+    def at_eof(self):
+        return self.reader.at_eof()
+
+    def can_write_eof(self):
+        return self.writer.can_write_eof()
 
     def close(self):
-        self._writer.close()
+        self.writer.close()
+
+    async def drain(self):
+        await self.writer.drain()
+
+    def get_extra_info(self, name, default=None):
+        return self.writer.get_extra_info(name, default)
+
+    def write(self, data):
+        self.writer.write(data)
+
+    def writelines(self, data):
+        self.writer.writelines(data)
+
+    def write_eof(self):
+        self.writer.write_eof()
+
+
+def write_link(writer, link):
+    """Serialize the link, Write a varint representing the length
+    of the serialized link, then write the link to writer.
+
+    Returns: None.
+    """
+    bin_link = link.SerializeToString()
+    writer.write(varint.encode(len(bin_link)))
+    writer.write(bin_link)
+
+
+def write_bin_link(writer, bin_link):
+    """Write a varint representing the length of the serialized link, then
+    write the link to writer.
+
+    Returns: None.
+    """
+    writer.write(varint.encode(len(bin_link)))
+    writer.write(bin_link)
 
 
 def args_to_sequence(args):

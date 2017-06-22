@@ -1,9 +1,9 @@
 import asyncio
-from asyncio import ensure_future
+from asyncio import ensure_future, IncompleteReadError
 from concurrent.futures import CancelledError
 import logging
 
-from smartlink import varint, EndOfStreamError, StreamReadWriter
+from smartlink import varint, StreamReadWriter, write_link, write_bin_link
 from smartlink.link_pb2 import NodeLink
 from google.protobuf.message import DecodeError
 
@@ -68,7 +68,7 @@ class NodeServer:
                     if bin_link:
                         # Write only when there's news to write
                         for client in self._clients:
-                            client.write_bin_link(bin_link)
+                            write_bin_link(client.writer, bin_link)
                         # logs are successfully sent
                         self._node.clear_log()
                 await asyncio.sleep(self._interval)
@@ -78,47 +78,39 @@ class NodeServer:
     async def _create_client(self, reader, writer):
         try:
             client = StreamReadWriter(reader, writer)
-            logger.info("Accepted connection from {ip}.".format(
-                ip=client.peername))
+            ip = client.get_extra_info('peername')
+            logger.info("Accepted connection from {ip}.".format(ip=ip))
 
             # Send description link
-            client.write_bin_link(self._str_desc)
+            write_bin_link(client, self._str_desc)
             # wait for b'RDY' from client
-            data = await client.read(3)
-            while len(data) < 3:
-                data += await client.read(3 - len(data))
+            data = await client.readexactly(3)
             if data != b'RDY':
                 # Not recognized respond
                 logger.error(
-                    "Response from client {ip} not recognized.".format(ip=client.peername))
+                    "Response from client {ip} not recognized.".format(ip=ip))
                 client.close()
                 return
 
             self._clients.append(client)
-            logger.info("Client from {ip} is ready.".format(
-                ip=client.peername))
+            logger.info("Client from {ip} is ready.".format(ip=ip))
 
             # Send a full link
-            full_link = self._node.get_full_update_link()
-            bin_link = full_link.SerializeToString()
-            client.write_bin_link(bin_link)
+            write_link(self._node.get_full_update_link())
 
             # The work loop
             while True:
                 length = await varint.decode(client)
-                buf = await client.read(length)
-                while len(buf) < length:
-                    buf += await client.read(length - len(buf))
+                buf = await client.readexactly(length)
                 cmd_link = NodeLink.FromString(buf)
                 self._node.execute(cmd_link)
-        except (EndOfStreamError, ConnectionError):
+        except (IncompleteReadError, ConnectionError):
             # client disconnects
-            logger.info("Client from {ip} disconnected.".format(
-                ip=client.peername))
+            logger.info("Client from {ip} disconnected.".format(ip=ip))
         except DecodeError:
             # purposely drop connection
             logger.error(
-                "Failed to decode NodeLink from client {ip}".format(ip=client.peername))
+                "Failed to decode NodeLink from client {ip}".format(ip=ip))
         except Exception:
             logger.exception("Unexpected Error!")
         finally:
