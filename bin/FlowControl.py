@@ -1,7 +1,6 @@
 import asyncio
 from asyncio import ensure_future
-from smartlink.node import Node
-from smartlink.nodeserver import NodeServer
+from smartlink import Node, NodeServer
 
 import sys
 from pathlib import Path  # if you haven't already done so
@@ -17,7 +16,7 @@ def main():
 
     pcd = alicat.PCD()
     node.add_device(pcd)
-    ensure_future(pcd.open_port('COM3'))
+    ensure_future(pcd.open_port('COM4'))
 
     loop = asyncio.get_event_loop()
     server = NodeServer(node, interval=0.2, loop=loop)
@@ -26,7 +25,6 @@ def main():
         loop.run_forever()
     except KeyboardInterrupt:
         pass
-
     server.close()
     loop.close()
 

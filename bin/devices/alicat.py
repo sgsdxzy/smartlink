@@ -19,6 +19,7 @@ class PCD(node.Device):
         self._address = address
         self._ports = ports
         self._loop = loop or asyncio.get_event_loop()
+        self._timeout = None
 
         self._connected = False
         self._reader = None
@@ -43,7 +44,6 @@ class PCD(node.Device):
         self.add_update("Pressure", "float", lambda: self._pressure, grp="Flow Control")
         self.add_update("Set-point", "float", lambda: self._set_point, grp="Flow Control")
         self.add_command("Set", "float", self.set_pressure, grp="Flow Control")
-        self.add_command("Tare", "", self.tare, grp="Flow Control")
 
     def connect_to_port(self, port_num):
         """Connect to port_num-th port in self._ports."""
@@ -79,7 +79,7 @@ class PCD(node.Device):
         self._connected = True
 
         # Enable streaming mode
-        self._write(b"*@=@")
+        self._write(b"*@=A")
         self._handle_res_task = ensure_future(self._handle_response())
 
     def close_port(self):
@@ -100,7 +100,7 @@ class PCD(node.Device):
         if not self._connected:
             self.logger.error(self.fullname, "Not connected.")
             return
-        self._writer.write(cmd)
+        self._writer.write(cmd + b'\r')
 
     async def _read(self):
         """Read response from PCD."""
@@ -108,7 +108,7 @@ class PCD(node.Device):
             self.logger.error(self.fullname, "Not connected.")
             return b""
         try:
-            response = await wait_for(self._reader.readuntil(b"\n"), timeout=self._timeout)
+            response = await wait_for(self._reader.readuntil(b"\r"), timeout=self._timeout)
         except asyncio.TimeoutError:
             self.logger.error(self.fullname, "Read timeout.")
             self.close_port()
@@ -134,7 +134,7 @@ class PCD(node.Device):
             while True:
                 res = await self._read()
                 try:
-                    self._pressure, self._set_point = res.split(b' ')
+                    _, self._pressure, self._set_point = res.split(b' ')
                 except ValueError:
                     self.logger.error(
                         self.fullname, "Unrecognized response: {0}".format(res.decode()))
@@ -145,9 +145,4 @@ class PCD(node.Device):
         """Set the pressure set-point."""
         pressure = pressure.encode()
         cmd = b"%cS%s" % (self._address, pressure)
-        self._write(cmd)
-
-    def tare(self):
-        """Tareing (zeroing) the device."""
-        cmd = b"%c$$P" % self._address
         self._write(cmd)

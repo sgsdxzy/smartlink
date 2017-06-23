@@ -42,6 +42,13 @@ class Logger(QTextEdit):
             asctime=time, source=source, level="INFO", name=name, message=message, exc="")
         self.insertPlainText(record)
 
+    def warning(self, name, message, source="CONTROL"):
+        time = datetime.today().strftime(self._datefmt)
+        record = self._fmt.format(
+            asctime=time, source=source, level="WARNING", name=name, message=message, exc="")
+        self.insertPlainText(record)
+        self._notify_btn()
+
     def error(self, name, message, source="CONTROL"):
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(

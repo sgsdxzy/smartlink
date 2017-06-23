@@ -233,7 +233,7 @@ class ControlPanel(QMainWindow):
         self._load_config()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._save_config)
-        self._timer.start(1000)
+        self._timer.start(30000)
         self._save_status_action = QAction('Save', self)
         self._save_status_action.setShortcut('Ctrl+S')
         self._save_status_action.setStatusTip('Save status file')

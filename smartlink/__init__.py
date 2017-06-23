@@ -8,6 +8,11 @@ from smartlink.nodeserver import NodeServer
 from smartlink.qtpanel import NodePanel
 
 
+class DeviceError(RuntimeError):
+    """Raised by Device when the execution of a command fails."""
+    pass
+
+
 class StreamReadWriter:
     """Class for storing the StreaReader and StreamWriter pair"""
     __slots__ = ["reader", "writer"]

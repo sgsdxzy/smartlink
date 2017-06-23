@@ -1,7 +1,6 @@
 import asyncio
 from asyncio import ensure_future
-from smartlink.node import Node
-from smartlink.nodeserver import NodeServer
+from smartlink import Node, NodeServer
 
 import sys
 from pathlib import Path  # if you haven't already done so
@@ -71,7 +70,6 @@ def main():
         loop.run_forever()
     except KeyboardInterrupt:
         pass
-
     server.close()
     loop.close()
 

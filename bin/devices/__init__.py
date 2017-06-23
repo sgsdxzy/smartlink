@@ -3,14 +3,15 @@ from asyncio import wait_for
 import serial
 from serial_asyncio import open_serial_connection
 
-from smartlink import node
+from smartlink import StreamReadWriter, Device, DeviceError
 
 
-class ReactiveSerialDevice(node.Device):
+class ReactiveSerialDevice(Device):
     """Smartlink device for reactive serial device with the operation mode
     of one response from device for one command to device."""
 
-    def __init__(self, name, write_sep=b'', read_sep=b'', ports=None, timeout=None, loop=None):
+    def __init__(self, name, write_sep=b'\r', read_sep=b'\r', ports=None,
+      timeout=None, ser_property={}, loop=None):
         """`ports` is a list of avaliable port names. If it is None, no serial
         connection management is provided on panel."""
         super().__init__(name)
@@ -19,11 +20,11 @@ class ReactiveSerialDevice(node.Device):
         self._read_sep_len = len(read_sep)
         self._ports = ports
         self._timeout = timeout
+        self._ser_property = ser_property
         self._loop = loop or asyncio.get_event_loop()
 
         self._connected = False
-        self._reader = None
-        self._writer = None
+        self._readwriter = None
         self._lock = asyncio.Lock()
 
         self._init_smartlink_ports()
@@ -44,73 +45,80 @@ class ReactiveSerialDevice(node.Device):
             index = int(port_num)
             await self.open_port(self._ports[index])
         except (ValueError, IndexError):
-            self.logger.error(
-                self.fullname, "No such port number: {0}".format(port_num))
+            self._log_error("No such port number: {0}".format(port_num))
+            raise DeviceError
 
-    async def open_port(self, port, **kargs):
-        """Open serial port `port`.
-        Returns: True if successful, False otherwise."""
+    async def open_port(self, port):
+        """Open serial port `port`."""
         if self._connected:
-            self.logger.error(self.fullname, "Already connected.")
-            return False
+            self._log_warning("Already connected.")
+            return
         try:
-            self._reader, self._writer = await wait_for(
-                open_serial_connection(url=port, **kargs), timeout=self._timeout)
+            self._readwriter = StreamReadWriter(await wait_for(
+                open_serial_connection(url=port, **self._ser_property), timeout=self._timeout))
         except asyncio.TimeoutError:
-            self.logger.error(self.fullname, "Connection timeout.")
-            return False
+            self._log_error("Connection timeout.")
+            raise DeviceError
         except (OSError, serial.SerialException):
-            self.logger.exception(
-                self.fullname, "Failed to open port {port}".format(port=port))
-            return False
+            self._log_exception("Failed to open port {port}".format(port=port))
+            raise DeviceError
         self._connected = True
-        return True
+        await self.init_device()
+
+    async def init_device(self):
+        """Initilize device after a successful `open_port()`."""
+        pass
 
     def close_port(self):
         """Close serial port."""
         if not self._connected:
-            # self.logger.error(self.fullname, "Not connected.")
             return
-        self._writer.close()
-        self._reader = None
-        self._writer = None
+        if self._readwriter is not None:
+            self._readwriter.close()
+            self._readwriter = None
         self._connected = False
 
     async def _write(self, cmd):
         """Write cmd to opened port."""
         if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return
+            self._log_error("Not connected.")
+            raise DeviceError
         with (await self._lock):
-            self._writer.write(cmd + self._write_sep)
+            self._readwriter.write(cmd + self._write_sep)
+
+    async def _force_write(self, cmd):
+        """Write cmd to opened port without acquiring lock first."""
+        if not self._connected:
+            self._log_error("Not connected.")
+            raise DeviceError
+        if self._lock.locked():
+            self._log_warning("Forcing another write while waiting for response.")
+        self._readwriter.write(cmd + self._write_sep)
 
     async def _write_and_read(self, cmd):
         """Write cmd to opened port, then await response."""
         if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return b""
+            self._log_error("Not connected.")
+            raise DeviceError
         with (await self._lock):
-            self._writer.write(cmd + self._write_sep)
+            # clear reader buffer, bypassing StreamReader encapsulation.
+            if len(self._readwriter.reader._buffer) > 0:
+                self._log_warning("Discarded non-empty device buffer.")
+                self._readwriter.reader._buffer.clear()
+
+            self._readwriter.write(cmd + self._write_sep)
             try:
                 response = await wait_for(self._reader.readuntil(self._read_sep), timeout=self._timeout)
             except asyncio.TimeoutError:
-                self.logger.error(self.fullname, "Read timeout.")
+                self._log_error("Read timeout.")
                 self.close_port()
-                return b""
+                raise DeviceError
             except asyncio.IncompleteReadError:
-                self.logger.error(self.fullname, "Connection lost while reading.")
+                self._log_error("Lost connection to device.")
                 self.close_port()
-                return b""
+                raise DeviceError
             except asyncio.LimitOverrunError:
-                self.logger.error(self.fullname, "Read buffer overrun.")
+                self._log_error("Read buffer overrun.")
                 self.close_port()
-                return b""
-        if response == b"":
-            # Connection is closed
-            self.logger.error(self.fullname, "Connection lost.")
-            self.close_port()
-            return b""
-        if self._read_sep_len > 0:
-            return response[:-self._read_sep_len]
-        else:
-            return response
+                raise DeviceError
+        return response[:-self._read_sep_len]

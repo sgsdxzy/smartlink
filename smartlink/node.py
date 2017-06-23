@@ -5,7 +5,7 @@ import traceback
 import asyncio
 from datetime import date, datetime
 
-from smartlink import Link, NodeLink, args_to_sequence
+from smartlink import DeviceError, Link, NodeLink, args_to_sequence
 
 
 class Logger:
@@ -35,31 +35,51 @@ class Logger:
             self._file.close()
             self._file = None
 
-    def info(self, name, message, source="NODE"):
-        """Print the message and log it to file"""
+    def info(self, name, message, source="NODE", verbose=True, local=True, remote=False):
+        """Print the message. If verbose is True, print it to stdout;
+        if local is True, log it to file; if remote is True,
+        append it to logbuffer to be sent over network."""
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
             asctime=time, source=source, level="INFO", name=name, message=message, exc="")
-        print(record, end="")
-        if self._file:
+        if verbose:
+            print(record, end="")
+        if local and self._file:
             self._file.write(record)
+        if remote and self._buffer is not None:
+            self._buffer.append(record)
 
-    def error(self, name, message, source="NODE"):
-        """Print the message, then append it to logbuffer"""
+    def warning(self, name, message, source="NODE", verbose=True, local=False, remote=True):
+        time = datetime.today().strftime(self._datefmt)
+        record = self._fmt.format(
+            asctime=time, source=source, level="WARNING", name=name, message=message, exc="")
+        if verbose:
+            print(record, end="")
+        if local and self._file:
+            self._file.write(record)
+        if remote and self._buffer is not None:
+            self._buffer.append(record)
+
+    def error(self, name, message, source="NODE", verbose=True, local=False, remote=True):
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
             asctime=time, source=source, level="ERROR", name=name, message=message, exc="")
-        print(record, end="")
-        if self._buffer is not None:
+        if verbose:
+            print(record, end="")
+        if local and self._file:
+            self._file.write(record)
+        if remote and self._buffer is not None:
             self._buffer.append(record)
 
-    def exception(self, name, message, source="NODE"):
-        """Print the message and traceback, then append them to logbuffer"""
+    def exception(self, name, message, source="NODE", verbose=True, local=False, remote=True):
         time = datetime.today().strftime(self._datefmt)
         record = self._fmt.format(
             asctime=time, source=source, level="EXCEPTION", name=name, message=message, exc=traceback.format_exc())
-        print(record, end="")
-        if self._buffer is not None:
+        if verbose:
+            print(record, end="")
+        if local and self._file:
+            self._file.write(record)
+        if remote and self._buffer is not None:
             self._buffer.append(record)
 
 
@@ -97,14 +117,17 @@ class Command:
         else:
             self._fullname = '.'.join((self._dev.fullname, self.name))
 
-    def _log_info(self, msg):
-        self._logger.info(self._fullname, msg)
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
 
-    def _log_error(self, msg):
-        self._logger.error(self._fullname, msg)
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
 
-    def _log_exception(self, msg):
-        self._logger.exception(self._fullname, msg)
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
 
     def _parse_args(self, args):
         """Convert the sequence of string in args to their corrsponding types
@@ -135,9 +158,14 @@ class Command:
             comp_args = self._parse_args(args)
             await self._func(*comp_args)
             self._log_info("Executed with arguments: {args}".format(args=' '.join(args)))
+        except DeviceError:
+            # The concrete error is already logged.
+            msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
+            self._log_error(msg, verbose=True, local=True, remote=True)
         except Exception:
-            self._log_exception("Failed to execute with arguments: {args}".format(
-                args=' '.join(args)))
+            msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
+            self._log_exception(msg)
+            self._log_error(msg, verbose=False, local=True, remote=False)
 
     def execute(self, link):
         """Call the associated func. If the func is a coroutine, it will be ensure_futured"""
@@ -149,9 +177,14 @@ class Command:
                 comp_args = self._parse_args(args)
                 self._func(*comp_args)
                 self._log_info("Executed with arguments: {args}".format(args=' '.join(args)))
+            except DeviceError:
+                # The concrete error is already logged.
+                msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
+                self._log_error(msg, verbose=True, local=True, remote=True)
             except Exception:
-                self._log_exception("Failed to execute with arguments: {args}".format(
-                    args=' '.join(args)))
+                msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
+                self._log_exception(msg)
+                self._log_error(msg, verbose=False, local=True, remote=False)
 
     def get_desc(self, dev_link):
         """Generate a description link to describe this Command, then append it to dev_link.
@@ -202,14 +235,17 @@ class Update:
         else:
             self._fullname = '.'.join((self._dev._fullname, self.name))
 
-    def _log_info(self, msg):
-        self._logger.info(self._fullname, msg)
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
 
-    def _log_error(self, msg):
-        self._logger.error(self._fullname, msg)
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
 
-    def _log_exception(self, msg):
-        self._logger.exception(self._fullname, msg)
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
 
     def get_update(self, dev_link):
         """Execute the associated func and if the result is different from old,
@@ -299,14 +335,17 @@ class Device:
         for update in self._updates:
             update.init_logger()
 
-    def _log_info(self, msg):
-        self._logger.info(self._fullname, msg)
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
 
-    def _log_error(self, msg):
-        self._logger.error(self._fullname, msg)
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
 
-    def _log_exception(self, msg):
-        self._logger.exception(self._fullname, msg)
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
 
     def add_group(self, name):
         """Create a new OperationGroup with name."""
@@ -420,14 +459,17 @@ class Node:
         self._log_buffer = []
         self._logger = Logger(filename=logfile, logbuffer=self._log_buffer)
 
-    def _log_info(self, msg):
-        self._logger.info(self._fullname, msg)
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
 
-    def _log_error(self, msg):
-        self._logger.error(self._fullname, msg)
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
 
-    def _log_exception(self, msg):
-        self._logger.exception(self._fullname, msg)
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
 
     def close(self):
         """Safely close this node object and free its resources.
