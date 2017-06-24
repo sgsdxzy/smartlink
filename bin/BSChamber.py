@@ -28,7 +28,7 @@ class BSXPS(newport.XPS):
             group_name = self._group_names[i]
             self.add_update("Positon", "float",
                 lambda i=i: self._group_positions[i], grp=group_name)
-            self.add_update("Status", "Int",
+            self.add_update("Status", "int",
                 lambda i=i: self._group_status[i], grp=group_name)
             self.add_command("Absolute move", "float",
                 lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
@@ -41,7 +41,7 @@ class BSXPS(newport.XPS):
         group_name = self._group_names[i]
         self.add_update("Positon", "float",
             lambda i=i: self._group_positions[i], grp=group_name)
-        self.add_update("Status", "Int",
+        self.add_update("Status", "int",
             lambda i=i: self._group_status[i], grp=group_name)
         self.add_update("Main", "bool",
             lambda i=i: self._group_positions[i] == 30, grp=group_name)
@@ -61,7 +61,8 @@ def main():
 
     node.add_device(xps)
 
-    ensure_future(xps.open_connection("192.168.254.254", 5001))
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(xps.open_connection("192.168.254.254", 5001))
 
     loop = asyncio.get_event_loop()
     server = NodeServer(node, interval=0.2, loop=loop)

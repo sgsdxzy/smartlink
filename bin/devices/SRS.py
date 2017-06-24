@@ -4,12 +4,7 @@ import asyncio
 from asyncio import ensure_future
 import serial
 
-import sys
-from pathlib import Path
-root = str(Path(__file__).resolve().parents[1])
-sys.path.append(root)
-
-from devices import ReactiveSerialDevice, DeviceError
+from . import ReactiveSerialDevice, DeviceError
 
 
 class DG645(ReactiveSerialDevice):
@@ -125,7 +120,8 @@ class DG645(ReactiveSerialDevice):
         elif res == b'1':
             self._advt = True
         else:
-            self._log_error("Unrecognized response for advanced triggering: {0}".format(res.decode()))
+            self._log_error("Unrecognized response: {0}".format(res.decode()))
+            raise DeviceError
 
     async def set_advt(self, i):
         """Set the advanced triggering enable register. If i is '0', advanced
@@ -141,10 +137,7 @@ class DG645(ReactiveSerialDevice):
     async def get_prescale_factor(self):
         """Query the prescale factor for Trigger input."""
         res = await self._write_and_read(b"PRES?0")
-        try:
-            self._prescale = int(res)
-        except ValueError:
-            self._log_error("Unrecognized response for prescale factor: {0}".format(res.decode()))
+        self._prescale = int(res)
 
     async def set_prescale_factor(self, i):
         """Set the prescale factor for Trigger input."""
@@ -156,10 +149,7 @@ class DG645(ReactiveSerialDevice):
     async def get_trigger_source(self):
         """Query the current trigger source."""
         res = await self._write_and_read(b"TSRC?")
-        try:
-            self._trigger_source = int(res)
-        except ValueError:
-            self._log_error("Unrecognized response for trigger source: {0}".format(res.decode()))
+        self._trigger_source = int(res)
 
     async def set_trigger_source(self, i):
         """Set the trigger source to i.
@@ -181,11 +171,8 @@ class DG645(ReactiveSerialDevice):
         for i in range(10):
             cmd = "DLAY?{i}".format(i=str(i))
             res = await self._write_and_read(cmd.encode())
-            try:
-                ch, delay = res.split(b',')
-                self._delays[i] = [int(ch), float(delay)]
-            except ValueError:
-                self._log_error("Unrecognized response for delay: {0}".format(res.decode()))
+            ch, delay = res.split(b',')
+            self._delays[i] = [int(ch), float(delay)]
 
     async def set_delay(self, c, d, t):
         """Set the delay for channel c to t relative to channel d."""
@@ -194,8 +181,5 @@ class DG645(ReactiveSerialDevice):
         await asyncio.sleep(self._wait_interval)
         query_cmd = "DLAY?{c}".format(c=str(c))
         res = await self._write_and_read(query_cmd.encode())
-        try:
-            ch, delay = res.split(b',')
-            self._delays[c] = [int(ch), float(delay)]
-        except ValueError:
-            self._log_error("Unrecognized response for delay: {0}".format(res.decode()))
+        ch, delay = res.split(b',')
+        self._delays[c] = [int(ch), float(delay)]

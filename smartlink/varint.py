@@ -27,7 +27,7 @@ async def decode(reader):
     shift = 0
     result = 0
     while True:
-        i = ord(await reader.readexcatly(1))
+        i = ord(await reader.readexactly(1))
         result |= (i & 0x7f) << shift
         shift += 7
         if not (i & 0x80):

@@ -3,9 +3,11 @@ from asyncio import ensure_future, IncompleteReadError
 from concurrent.futures import CancelledError
 import logging
 
-from smartlink import varint, StreamReadWriter, write_link, write_bin_link
-from smartlink import NodeLink
 from google.protobuf.message import DecodeError
+
+from . import varint
+from .common import StreamReadWriter, write_link, write_bin_link
+from .link_pb2 import NodeLink
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -68,7 +70,7 @@ class NodeServer:
                     if bin_link:
                         # Write only when there's news to write
                         for client in self._clients:
-                            write_bin_link(client.writer, bin_link)
+                            write_bin_link(client, bin_link)
                         # logs are successfully sent
                         self._node.clear_log()
                 await asyncio.sleep(self._interval)
@@ -96,7 +98,7 @@ class NodeServer:
             logger.info("Client from {ip} is ready.".format(ip=ip))
 
             # Send a full link
-            write_link(self._node.get_full_update_link())
+            write_link(client, self._node.get_full_update_link())
 
             # The work loop
             while True:

@@ -54,7 +54,7 @@ class ReactiveSerialDevice(Device):
             self._log_warning("Already connected.")
             return
         try:
-            self._readwriter = StreamReadWriter(await wait_for(
+            self._readwriter = StreamReadWriter(*await wait_for(
                 open_serial_connection(url=port, **self._ser_property), timeout=self._timeout))
         except asyncio.TimeoutError:
             self._log_error("Connection timeout.")
@@ -108,7 +108,7 @@ class ReactiveSerialDevice(Device):
 
             self._readwriter.write(cmd + self._write_sep)
             try:
-                response = await wait_for(self._reader.readuntil(self._read_sep), timeout=self._timeout)
+                response = await wait_for(self._readwriter.readuntil(self._read_sep), timeout=self._timeout)
             except asyncio.TimeoutError:
                 self._log_error("Read timeout.")
                 self.close_port()

@@ -14,10 +14,12 @@ from PyQt5.QtCore import pyqtSlot, QTimer, Qt
 from google.protobuf.message import DecodeError
 from google.protobuf import json_format
 
-from smartlink import StreamReadWriter, Link, DeviceLink, NodeLink, write_link, varint
-from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget,
-                               UEnumWidget, CStrWidget, CFloatWidget, CIntWidget,
-                               CBoolWidget, CEnumWidget)
+from .common import StreamReadWriter, write_link
+from .link_pb2 import Link, DeviceLink, NodeLink
+from . import varint
+from .widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget,
+                    UEnumWidget, CStrWidget, CFloatWidget, CIntWidget,
+                    CBoolWidget, CEnumWidget)
 
 
 class Logger(QTextEdit):
@@ -498,11 +500,17 @@ class DevicePanel(QFrame):
         self._headline.insertWidget(0, self._title)
 
         for grp in self._desc_link.groups:
+            if grp.startswith('_'):
+                # Invisible groups
+                continue
             grp_panel = GroupPanel(grp)
             self._groups[grp] = grp_panel
             self._layout.addWidget(grp_panel)
 
         for link in self._desc_link.links:
+            if link.group.startswith('_'):
+                # in invisible group
+                continue
             if link.type == Link.COMMAND:
                 try:
                     widget = CommandWidget(self, link)
@@ -918,21 +926,26 @@ class NodePanel(QFrame):
         except (IncompleteReadError, ConnectionError):
             if self._peaceful_disconnect:
                 msg = "Disconnected from server {ip}".format(ip=self._host_ip)
+                self._status_bar.showMessage(msg)
+                self._log_info(msg, source="PANEL")
                 self._status_light.setStyleSheet(self.StyleDisabled)
             else:
                 msg = "Server at {ip} dropped connection.".format(
                     ip=self._host_ip)
+                self._status_bar.showMessage(msg)
+                self._log_error(msg, source="PANEL")
                 self._status_light.setStyleSheet(self.StyleError)
         except DecodeError:
             msg = "Failed to decode NodeLink."
+            self._status_bar.showMessage(msg)
+            self._log_error(msg, source="PANEL")
             self._status_light.setStyleSheet(self.StyleError)
         except Exception:
-            msg = "Unexpected Error!"
+            msg = "Unexpected Error."
+            self._status_bar.showMessage(msg)
+            self._log_exception(msg, source="PANEL")
             self._status_light.setStyleSheet(self.StyleError)
         finally:
-            # Log entry
-            self._status_bar.showMessage(msg)
-            self._log_info(msg, source="PANEL")
             # Make sure the connection is closed
             if self._readwriter is not None:
                 self._readwriter.close()

@@ -2,12 +2,7 @@
 
 import serial
 
-import sys
-from pathlib import Path
-root = str(Path(__file__).resolve().parents[1])
-sys.path.append(root)
-
-from devices import ReactiveSerialDevice, DeviceError
+from . import ReactiveSerialDevice, DeviceError
 
 
 class SC300(ReactiveSerialDevice):

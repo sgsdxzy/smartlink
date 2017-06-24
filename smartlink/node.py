@@ -5,7 +5,8 @@ import traceback
 import asyncio
 from datetime import date, datetime
 
-from smartlink import DeviceError, Link, NodeLink, args_to_sequence
+from .common import DeviceError, args_to_sequence
+from .link_pb2 import Link, NodeLink
 
 
 class Logger:
@@ -115,7 +116,7 @@ class Command:
             self._fullname = '.'.join(
                 (self._dev._fullname, self.grp, self.name))
         else:
-            self._fullname = '.'.join((self._dev.fullname, self.name))
+            self._fullname = '.'.join((self._dev._fullname, self.name))
 
     def _log_info(self, msg, **kargs):
         self._logger.info(self._fullname, msg, **kargs)
@@ -255,7 +256,7 @@ class Update:
         """
         try:
             new = self._func()
-            if self._sig:
+            if self._sigs:
                 # Only send the update if signature is non-empty
                 if new == self._old or None:
                     return None
@@ -278,7 +279,7 @@ class Update:
         """
         try:
             new = self._func()
-            if self._sig:
+            if self._sigs:
                 # Only send the update if signature is non-empty
                 link = dev_link.links.add()
                 link.id = self.id
@@ -294,7 +295,7 @@ class Update:
 
         Returns: the created Link or None is signature is empty
         """
-        if self._sig:
+        if self._sigs:
             # Only send the update if signature is non-empty
             link = dev_link.links.add()
             link.type = Link.UPDATE
