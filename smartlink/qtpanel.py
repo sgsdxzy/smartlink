@@ -20,8 +20,6 @@ from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget
                                CBoolWidget, CEnumWidget)
 
 
-class
-
 class Logger(QTextEdit):
     """A non-persistent object-level logger with a QTextEdit display"""
     datefmt = '%Y-%m-%d %H:%M:%S'
@@ -135,33 +133,28 @@ class CommandWidget(QFrame):
 
         Returns: None
         """
-        try:
-            if self._desc_link.sigs:
-                label = QLabel(self._desc_link.name)
-                self._full_widget_list.append(label)
-                for i, sig in enumerate(self._desc_link.sigs):
-                    if len(self._desc_link.args) > i:
-                        ext_arg = self._desc_link.args[i]
-                    else:
-                        ext_arg = None
-                    widget = self._widget_dict[sig](ext_arg)
-                    self._widget_list.append(widget)
-                    self._full_widget_list.append(widget)
-                button = QPushButton("Apply")
-                button.clicked.connect(self._send_command)
-                self._full_widget_list.append(button)
+        if self._desc_link.sigs:
+            label = QLabel(self._desc_link.name)
+            self._full_widget_list.append(label)
+            for i, sig in enumerate(self._desc_link.sigs):
+                if len(self._desc_link.args) > i:
+                    ext_arg = self._desc_link.args[i]
+                else:
+                    ext_arg = None
+                widget = self._widget_dict[sig](ext_arg)
+                self._widget_list.append(widget)
+                self._full_widget_list.append(widget)
+            button = QPushButton("Apply")
+            button.clicked.connect(self._send_command)
+            self._full_widget_list.append(button)
 
-            else:  # signature is empty, generate a single button with name
-                button = QPushButton(self._desc_link.name)
-                button.clicked.connect(self._send_command)
-                self._full_widget_list.append(button)
+        else:  # signature is empty, generate a single button with name
+            button = QPushButton(self._desc_link.name)
+            button.clicked.connect(self._send_command)
+            self._full_widget_list.append(button)
 
-            for widget in self._full_widget_list:
-                self._layout.addWidget(widget)
-
-        except Exception:
-            self._log_exception("Failed to create widget.")
-            raise RuntimeError
+        for widget in self._full_widget_list:
+            self._layout.addWidget(widget)
 
     @pyqtSlot()
     def _light_flash(self):
@@ -294,24 +287,20 @@ class UpdateWidget(QFrame):
 
         Returns: None
         """
-        try:
-            if self._desc_link.sigs:
-                label = QLabel(self.name)
-                self._full_widget_list.append(label)
-                for i, sig in enumerate(self._desc_link.sigs):
-                    if len(self._desc_link.args) > i:
-                        ext_arg = self._desc_link.args[i]
-                    else:
-                        ext_arg = None
-                    widget = self._widget_dict[sig](ext_arg)
-                    self._widget_list.append(widget)
-                    self._full_widget_list.append(widget)
+        if self._desc_link.sigs:
+            label = QLabel(self.name)
+            self._full_widget_list.append(label)
+            for i, sig in enumerate(self._desc_link.sigs):
+                if len(self._desc_link.args) > i:
+                    ext_arg = self._desc_link.args[i]
+                else:
+                    ext_arg = None
+                widget = self._widget_dict[sig](ext_arg)
+                self._widget_list.append(widget)
+                self._full_widget_list.append(widget)
 
-            for widget in self._full_widget_list:
-                self._layout.addWidget(widget)
-        except Exception:
-            self._log_exception("Failed to create widget.")
-            raise RuntimeError
+        for widget in self._full_widget_list:
+            self._layout.addWidget(widget)
 
     @pyqtSlot()
     def _light_flash(self):
@@ -514,20 +503,38 @@ class DevicePanel(QFrame):
             self._layout.addWidget(grp_panel)
 
         for link in self._desc_link.links:
-            try:
-                if link.type == Link.COMMAND:
+            if link.type == Link.COMMAND:
+                try:
                     widget = CommandWidget(self, link)
-                    self._commands[link.id] = widget
+                except Exception:
+                    if link.group:
+                        fullname = '.'.join((link.group, link.name))
+                    else:
+                        fullname = link.name
+                    self._log_exception(
+                        "Failed to create widget: {name}".format(name=fullname))
+                    continue
+                self._commands[link.id] = widget
+                try:
                     self._groups[link.group].add_cmd_widget(widget)
-                else:  # link.type == Link.UPDATE:
+                except KeyError:
+                    self._log_error("Unknown group name: {name}".format(name=link.group))
+            else:  # link.type == Link.UPDATE:
+                try:
                     widget = UpdateWidget(self, link)
-                    self._updates[link.id] = widget
+                except Exception:
+                    if link.group:
+                        fullname = '.'.join((link.group, link.name))
+                    else:
+                        fullname = link.name
+                    self._log_exception(
+                        "Failed to create widget: {name}".format(name=fullname))
+                    continue
+                self._updates[link.id] = widget
+                try:
                     self._groups[link.group].add_update_widget(widget)
-            except RuntimeError:
-                # Widget creation failed, already logged
-                continue
-            except KeyError:
-                self._log_error("Unknown group name: {name}".format(name=link.group))
+                except KeyError:
+                    self._log_error("Unknown group name: {name}".format(name=link.group))
 
         empty_groups = []
         for grp, grp_panel in self._groups.items():
@@ -835,6 +842,9 @@ class NodePanel(QFrame):
     def _log_exception(self, msg, **kargs):
         self._logger.exception(self._fullname, msg, **kargs)
 
+    def _log_remote(self, msg, **kargs):
+        self._logger.remote(msg, **kargs)
+
     def _clear_devices(self):
         """Remove all device panels from node panel.
 
@@ -864,7 +874,7 @@ class NodePanel(QFrame):
             self._host_ip = self._host_edit.text()
             msg = "Connecting to {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
-            self.logger.info("", msg, "PANEL")
+            self._log_info(msg, source="PANEL")
             self._status_light.setStyleSheet(self.StyleWorking)
             ensure_future(self._hanlde_connection())
 
@@ -887,7 +897,7 @@ class NodePanel(QFrame):
             self._status_light.setStyleSheet(self.StyleReady)
             msg = "Connected to {ip}".format(ip=self._host_ip)
             self._status_bar.showMessage(msg)
-            self.logger.info("", msg, "PANEL")
+            self._log_info(msg, source="PANEL")
             self._readwriter.write("RDY".encode())
 
             # The work loop
@@ -896,7 +906,7 @@ class NodePanel(QFrame):
                 buf = await self._readwriter.readexactly(length)
                 update_link = NodeLink.FromString(buf)
                 for record in update_link.logs:
-                    self.logger.remote(record)
+                    self._log_remote(record)
 
                 for dev_link in update_link.dev_links:
                     dev = self._devices[dev_link.id]
@@ -922,7 +932,7 @@ class NodePanel(QFrame):
         finally:
             # Log entry
             self._status_bar.showMessage(msg)
-            self.logger.info("", msg, "PANEL")
+            self._log_info(msg, source="PANEL")
             # Make sure the connection is closed
             if self._readwriter is not None:
                 self._readwriter.close()
@@ -941,11 +951,11 @@ class NodePanel(QFrame):
 
     @pyqtSlot()
     def _log_btn_exec(self):
-        if self.logger.isVisible():
-            self.logger.hide()
+        if self._logger.isVisible():
+            self._logger.hide()
         else:
             self._log_btn.setText("Log")
-            self.logger.show()
+            self._logger.show()
 
     @pyqtSlot()
     def _light_flash(self):
@@ -958,7 +968,7 @@ class NodePanel(QFrame):
             self._status_bar.showMessage(
                 "Please disconnect before closing panel.")
         else:
-            self.logger.deleteLater()
+            self._logger.deleteLater()
             self.deleteLater()
 
     def get_status_link(self):
