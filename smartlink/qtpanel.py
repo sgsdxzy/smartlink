@@ -20,6 +20,8 @@ from smartlink.widgets import (UStrWidget, UFloatWidget, UIntWidget, UBoolWidget
                                CBoolWidget, CEnumWidget)
 
 
+class
+
 class Logger(QTextEdit):
     """A non-persistent object-level logger with a QTextEdit display"""
     datefmt = '%Y-%m-%d %H:%M:%S'
@@ -95,18 +97,30 @@ class CommandWidget(QFrame):
         self.name = desc_link.name
         self.grp = desc_link.group
         if self.grp:
-            self.fullname = '.'.join((dev_panel.fullname, self.grp, self.name))
+            self._fullname = '.'.join((dev_panel._fullname, self.grp, self.name))
         else:
-            self.fullname = '.'.join((dev_panel.fullname, self.name))
+            self._fullname = '.'.join((dev_panel._fullname, self.name))
         self._widget_list = []
         self._full_widget_list = []
-        self.logger = dev_panel.logger
+        self._logger = dev_panel._logger
 
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.setStyleSheet(self.StyleNormal)
         self._layout = QHBoxLayout()
         self.setLayout(self._layout)
         self._generate_UI()
+
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
+
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
+
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
 
     @property
     def widget_length(self):
@@ -130,7 +144,7 @@ class CommandWidget(QFrame):
                         ext_arg = self._desc_link.args[i]
                     else:
                         ext_arg = None
-                    widget = self._widget_dict.get(sig, CStrWidget)(ext_arg)
+                    widget = self._widget_dict[sig](ext_arg)
                     self._widget_list.append(widget)
                     self._full_widget_list.append(widget)
                 button = QPushButton("Apply")
@@ -146,7 +160,7 @@ class CommandWidget(QFrame):
                 self._layout.addWidget(widget)
 
         except Exception:
-            self.logger.exception(self.fullname, "Failed to create widget.")
+            self._log_exception("Failed to create widget.")
             raise RuntimeError
 
     @pyqtSlot()
@@ -241,18 +255,30 @@ class UpdateWidget(QFrame):
         self.name = desc_link.name
         self.grp = desc_link.group
         if self.grp:
-            self.fullname = '.'.join((dev_panel.fullname, self.grp, self.name))
+            self._fullname = '.'.join((dev_panel._fullname, self.grp, self.name))
         else:
-            self.fullname = '.'.join((dev_panel.fullname, self.name))
+            self._fullname = '.'.join((dev_panel._fullname, self.name))
         self._widget_list = []
         self._full_widget_list = []
-        self.logger = dev_panel.logger
+        self._logger = dev_panel._logger
 
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.setStyleSheet(self.StyleNormal)
         self._layout = QHBoxLayout()
         self.setLayout(self._layout)
         self._generate_UI()
+
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
+
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
+
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
 
     @property
     def widget_length(self):
@@ -277,14 +303,14 @@ class UpdateWidget(QFrame):
                         ext_arg = self._desc_link.args[i]
                     else:
                         ext_arg = None
-                    widget = self._widget_dict.get(sig, UStrWidget)(ext_arg)
+                    widget = self._widget_dict[sig](ext_arg)
                     self._widget_list.append(widget)
                     self._full_widget_list.append(widget)
 
             for widget in self._full_widget_list:
                 self._layout.addWidget(widget)
         except Exception:
-            self.logger.exception(self.fullname, "Failed to create widget.")
+            self._log_exception("Failed to create widget.")
             raise RuntimeError
 
     @pyqtSlot()
@@ -301,7 +327,7 @@ class UpdateWidget(QFrame):
             for i, arg in enumerate(link.args):
                 self._widget_list[i].set_arg(arg)
         except Exception:
-            self.logger.exception(self.fullname, "Failed to display update.")
+            self._log_exception("Failed to display update.")
             self.setStyleSheet(self.StyleError)
             QTimer.singleShot(1000, self._light_flash)
 
@@ -430,8 +456,8 @@ class DevicePanel(QFrame):
         self._desc_link = desc_link
         self.id_ = desc_link.id
         self.name = desc_link.name
-        self.fullname = '.'.join((node_panel.fullname, self.name))
-        self.logger = node_panel.logger
+        self._fullname = '.'.join((node_panel._fullname, self.name))
+        self._logger = node_panel._logger
         self._commands = {}
         self._updates = {}
         self._groups = {}
@@ -461,6 +487,18 @@ class DevicePanel(QFrame):
 
         self._generate_UI()
 
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
+
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
+
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
+
     def _generate_UI(self):
         """Populate the panel by desc_link.
 
@@ -489,8 +527,7 @@ class DevicePanel(QFrame):
                 # Widget creation failed, already logged
                 continue
             except KeyError:
-                self.logger.error(
-                    self.fullname, "Unknown group name: {name}".format(name=link.group))
+                self._log_error("Unknown group name: {name}".format(name=link.group))
 
         empty_groups = []
         for grp, grp_panel in self._groups.items():
@@ -506,7 +543,7 @@ class DevicePanel(QFrame):
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
         time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
-            pdir, "save", "{name} {time} status{ext}".format(name=self.fullname,
+            pdir, "save", "{name} {time} status{ext}".format(name=self._fullname,
                                                              time=time, ext='.json'))
         filenames = QFileDialog.getSaveFileName(self, 'Save status file',
                                                 stfile, 'Json file (*.json);;Any file (*)',
@@ -520,8 +557,7 @@ class DevicePanel(QFrame):
                     with open(filename, mode='w', encoding='ascii') as f:
                         f.write(json_link)
                 except OSError:
-                    self.logger.exception(
-                        self.fullname, "Failed to create file: {filename}".format(filename=filename))
+                    self._log_exception("Failed to create file: {filename}".format(filename=filename))
 
     def get_status(self, node_link):
         """Collect status args from updates and wrap them into a DeviceLink,
@@ -560,7 +596,7 @@ class DevicePanel(QFrame):
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
         time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
-            pdir, "save", "{name} {time} commands{ext}".format(name=self.fullname,
+            pdir, "save", "{name} {time} commands{ext}".format(name=self._fullname,
                                                                time=time, ext='.json'))
         filenames = QFileDialog.getSaveFileName(self, 'Save command file',
                                                 stfile, 'Json file (*.json);;Any file (*)',
@@ -574,8 +610,7 @@ class DevicePanel(QFrame):
                     with open(filename, mode='w', encoding='ascii') as f:
                         f.write(json_link)
                 except OSError:
-                    self.logger.exception(
-                        self.fullname, "Failed to create file: {filename}".format(filename=filename))
+                    self._log_exception("Failed to create file: {filename}".format(filename=filename))
 
     def _get_full_cmd_link(self):
         """Get commands from the commands and wrap them in a DeviceLink.
@@ -606,15 +641,13 @@ class DevicePanel(QFrame):
                 with open(filename, mode='r', encoding='ascii') as f:
                     json_link = f.read()
             except OSError:
-                self.logger.exception(
-                    self.fullname, "Failed to open file: {filename}".format(filename=filename))
+                self._log_exception("Failed to open file: {filename}".format(filename=filename))
                 return
             try:
                 cmd_link = DeviceLink()
                 json_format.Parse(json_link, cmd_link, True)
             except json_format.ParseError:
-                self.logger.error(
-                    self.fullname, "Failed to decode commands from file: {filename}".format(filename=filename))
+                self._log_error("Failed to decode commands from file: {filename}".format(filename=filename))
                 return
             self.set_cmd_from(cmd_link)
 
@@ -665,8 +698,7 @@ class DevicePanel(QFrame):
                 update = self._updates[link.id]
                 update.update_from(link)
             except KeyError:
-                self.logger.error(
-                    self.fullname, "Wrong update id: {id}".format(id=link.id))
+                self._log_error("Wrong update id: {id}".format(id=link.id))
 
     def get_cmd(self, node_link):
         """Get commands from the list of Commands and wrap them in a DeviceLink,
@@ -731,7 +763,7 @@ class NodePanel(QFrame):
         self._readwriter = None
         self._desc_link = None
         self._devices = {}
-        self.fullname = ""
+        self._fullname = ""
         self._peaceful_disconnect = False
 
         self._initUI()
@@ -767,7 +799,7 @@ class NodePanel(QFrame):
         self._load_cmd_btn = QPushButton("Load commands")
         self._apply_all_btn = QPushButton("Apply all")
         self._log_btn = QPushButton("Log")
-        self.logger = Logger(self._log_btn)
+        self._logger = Logger(self._log_btn)
         self._close_btn = QPushButton("X")
         self._close_btn.setFixedSize(24, 24)
         self._outer_layout.addWidget(self._connect_btn, 1, 0)
@@ -791,6 +823,18 @@ class NodePanel(QFrame):
         self._log_btn.clicked.connect(self._log_btn_exec)
         self._close_btn.clicked.connect(self._close)
 
+    def _log_info(self, msg, **kargs):
+        self._logger.info(self._fullname, msg, **kargs)
+
+    def _log_warning(self, msg, **kargs):
+        self._logger.warning(self._fullname, msg, **kargs)
+
+    def _log_error(self, msg, **kargs):
+        self._logger.error(self._fullname, msg, **kargs)
+
+    def _log_exception(self, msg, **kargs):
+        self._logger.exception(self._fullname, msg, **kargs)
+
     def _clear_devices(self):
         """Remove all device panels from node panel.
 
@@ -807,7 +851,7 @@ class NodePanel(QFrame):
 
         Returns: None
         """
-        self.set_title(self.fullname)
+        self.set_title(self._fullname)
         for dev_link in self._desc_link.dev_links:
             dev_panel = DevicePanel(self, dev_link)
             self._devices[dev_link.id] = dev_panel
@@ -838,7 +882,7 @@ class NodePanel(QFrame):
             # Set states
             self._connected = True
             self._peaceful_disconnect = False
-            self.fullname = self._desc_link.name
+            self._fullname = self._desc_link.name
             self._generate_panel()
             self._status_light.setStyleSheet(self.StyleReady)
             msg = "Connected to {ip}".format(ip=self._host_ip)
@@ -884,7 +928,7 @@ class NodePanel(QFrame):
                 self._readwriter.close()
             self._readwriter = None
             self._connected = False
-            self.fullname = ""
+            self._fullname = ""
 
     @pyqtSlot()
     def _disconnect_btn_exec(self):
@@ -928,7 +972,7 @@ class NodePanel(QFrame):
         if not node_link.dev_links:  # empty
             return None
         else:
-            node_link.name = self.fullname
+            node_link.name = self._fullname
             return node_link
 
     def send_command(self, node_link):
@@ -941,7 +985,7 @@ class NodePanel(QFrame):
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
         time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
-            pdir, "save", "{name} {time} status{ext}".format(name=self.fullname,
+            pdir, "save", "{name} {time} status{ext}".format(name=self._fullname,
                                                              time=time, ext='.json'))
         filenames = QFileDialog.getSaveFileName(self, 'Save status file',
                                                 stfile, 'Json file (*.json);;Any file (*)',
@@ -955,8 +999,7 @@ class NodePanel(QFrame):
                     with open(filename, mode='w', encoding='ascii') as f:
                         f.write(json_link)
                 except OSError:
-                    self.logger.exception(
-                        self.fullname, "Failed to create file: {filename}".format(filename=filename))
+                    self._log_exception("Failed to create file: {filename}".format(filename=filename))
 
     @pyqtSlot()
     def _save_cmd(self):
@@ -964,7 +1007,7 @@ class NodePanel(QFrame):
         pdir = os.path.abspath(os.path.dirname(sys.argv[0]))
         time = datetime.today().strftime(self.datefmt)
         stfile = os.path.join(
-            pdir, "save", "{name} {time} commands{ext}".format(name=self.fullname,
+            pdir, "save", "{name} {time} commands{ext}".format(name=self._fullname,
                                                                time=time, ext='.json'))
         filenames = QFileDialog.getSaveFileName(self, 'Save command file',
                                                 stfile, 'Json file (*.json);;Any file (*)',
@@ -978,8 +1021,7 @@ class NodePanel(QFrame):
                     with open(filename, mode='w', encoding='ascii') as f:
                         f.write(json_link)
                 except OSError:
-                    self.logger.exception(
-                        self.fullname, "Failed to create file: {filename}".format(filename=filename))
+                    self._log_exception("Failed to create file: {filename}".format(filename=filename))
 
     def get_cmd_link(self):
         """Get commands from the list of devices and wrap them in a NodeLink.
@@ -1002,7 +1044,7 @@ class NodePanel(QFrame):
         Returns: the created NodeLink or None if empty.
         """
         node_link = NodeLink()
-        node_link.name = self.fullname
+        node_link.name = self._fullname
         for dev in self._devices.values():
             dev.get_full_cmd(node_link)
         if not node_link.dev_links:  # empty
@@ -1022,15 +1064,13 @@ class NodePanel(QFrame):
                 with open(filename, mode='r', encoding='ascii') as f:
                     json_link = f.read()
             except OSError:
-                self.logger.exception(
-                    self.fullname, "Failed to open file: {filename}".format(filename=filename))
+                self._log_exception("Failed to open file: {filename}".format(filename=filename))
                 return
             try:
                 cmd_link = NodeLink()
                 json_format.Parse(json_link, cmd_link, True)
             except json_format.ParseError:
-                self.logger.error(
-                    self.fullname, "Failed to decode commands from file: {filename}".format(filename=filename))
+                self._log_error("Failed to decode commands from file: {filename}".format(filename=filename))
                 return
             self.set_cmd_from(cmd_link)
 

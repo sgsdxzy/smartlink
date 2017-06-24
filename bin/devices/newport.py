@@ -37,8 +37,7 @@ class XPS(node.Device):
         self._backlash = False
         self._group_names = group_names
         self._group_num = len(self._group_names)
-        self._group_status = ['0'] * self._group_num
-        self._group_compensation = ['0'] * self._group_num
+        self._group_status = [0] * self._group_num
         self._group_positions = [0] * self._group_num
 
         self._init_smartlink()
@@ -57,7 +56,7 @@ class XPS(node.Device):
             group_name = self._group_names[i]
             self.add_update("Positon", "float",
                 lambda i=i: self._group_positions[i], grp=group_name)
-            self.add_update("Status", "Int",
+            self.add_update("Status", "int",
                 lambda i=i: self._group_status[i], grp=group_name)
             self.add_command("Absolute move", "float",
                 lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
@@ -88,11 +87,15 @@ class XPS(node.Device):
         try:
             while True:
                 for i in range(self._group_num):
-                    group_name = self._group_names[i]
-                    status = await self.GroupStatusGet(group_name)
-                    self._group_status[i] = status[1]
-                    position = await self.GroupPositionCurrentGet(group_name, 1)
-                    self._group_positions[i] = float(position[1])
+                    try:
+                        group_name = self._group_names[i]
+                        status = await self.GroupStatusGet(group_name)
+                        self._group_status[i] = int(status[1])
+                        position = await self.GroupPositionCurrentGet(group_name, 1)
+                        self._group_positions[i] = float(position[1])
+                    except ValueError:
+                        # Would result in log spam
+                        pass
                 await asyncio.sleep(self._interval)
         except CancelledError:
             return
@@ -122,26 +125,6 @@ class XPS(node.Device):
             *[self.GroupKill(group_name) for group_name in self._group_names])
         # await self.get_status_all()
 
-    async def get_status_all(self):
-        """Get group status for all groups."""
-        if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return
-        status = await asyncio.gather(
-            *[self.GroupStatusGet(group_name) for group_name in self._group_names])
-        for i in range(self._group_num):
-            self._group_status[i] = status[i][1]
-
-    async def get_positions_all(self):
-        """Get the position for all groups."""
-        if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return
-        positions = await asyncio.gather(
-            *[self.GroupPositionCurrentGet(group_name, 1) for group_name in self._group_names])
-        for i in range(self._group_num):
-            self._group_positions[i] = float(positions[i][1])
-
     async def absolute_move(self, i, pos):
         group_name = self._group_names[i]
         if not self._backlash:
@@ -155,11 +138,6 @@ class XPS(node.Device):
             else:
                 await self.GroupMoveAbsolute(group_name, [pos])
 
-        # status = await self.GroupStatusGet(group_name)
-        # self._group_status[i] = status[1]
-        # position = await self.GroupPositionCurrentGet(group_name, 1)
-        # self._group_positions[i] = float(position[1])
-
     async def relative_move(self, i, pos):
         group_name = self._group_names[i]
         if not self._backlash:
@@ -171,11 +149,6 @@ class XPS(node.Device):
                 await self.GroupMoveRelative(group_name, [str(self._comp_amount)])
             else:
                 await self.GroupMoveRelative(group_name, [pos])
-
-        # status = await self.GroupStatusGet(group_name)
-        # self._group_status[i] = status[1]
-        # position = await self.GroupPositionCurrentGet(group_name, 1)
-        # self._group_positions[i] = float(position[1])
 
     async def _sendAndReceive(self, command):
         """Send command and get return."""
