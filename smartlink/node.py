@@ -87,7 +87,7 @@ class Logger:
 class Command:
     """Command is the type of operation sent by control to be executed on node."""
     __slots__ = ["_dev", "id", "name", "grp", "_fullname",
-                 "_sigs", "_func", "_is_coro", "_ext_args", "_logger"]
+                 "_sigs", "_func", "_ext_args", "_logger"]
 
     def __init__(self, dev, id_, name, sigs, func, ext_args=None, grp=""):
         self._dev = dev
@@ -99,10 +99,6 @@ class Command:
         else:
             self._sigs = []
         self._func = func
-        if asyncio.iscoroutinefunction(func):
-            self._is_coro = True
-        else:
-            self._is_coro = False
         if ext_args:
             self._ext_args = list(args_to_sequence(ext_args))
         else:
@@ -153,11 +149,10 @@ class Command:
             else:
                 raise NotImplementedError("Unsupported signature type: {0}".format(sig))
 
-    async def _exec_func(self, args):
-        """Wrapper to execute coroutine func."""
+    async def _exec_func(self, coro, args):
+        """Wrapper to execute coroutine."""
         try:
-            comp_args = self._parse_args(args)
-            await self._func(*comp_args)
+            await coro
             self._log_info("Executed with arguments: {args}".format(args=' '.join(args)))
         except DeviceError:
             # The concrete error is already logged.
@@ -171,21 +166,21 @@ class Command:
     def execute(self, link):
         """Call the associated func. If the func is a coroutine, it will be ensure_futured"""
         args = link.args
-        if self._is_coro:
-            asyncio.ensure_future(self._exec_func(args))
-        else:
-            try:
-                comp_args = self._parse_args(args)
-                self._func(*comp_args)
+        try:
+            comp_args = self._parse_args(args)
+            obj = self._func(*comp_args)
+            if asyncio.iscoroutine(obj):
+                asyncio.ensure_future(self._exec_func(obj, args))
+            else:
                 self._log_info("Executed with arguments: {args}".format(args=' '.join(args)))
-            except DeviceError:
-                # The concrete error is already logged.
-                msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
-                self._log_error(msg, verbose=True, local=True, remote=True)
-            except Exception:
-                msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
-                self._log_exception(msg)
-                self._log_error(msg, verbose=False, local=True, remote=False)
+        except DeviceError:
+            # The concrete error is already logged.
+            msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
+            self._log_error(msg, verbose=True, local=True, remote=True)
+        except Exception:
+            msg = "Failed to execute with arguments: {args}".format(args=' '.join(args))
+            self._log_exception(msg)
+            self._log_error(msg, verbose=False, local=True, remote=False)
 
     def get_desc(self, dev_link):
         """Generate a description link to describe this Command, then append it to dev_link.
