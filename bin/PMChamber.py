@@ -1,5 +1,4 @@
 import asyncio
-from asyncio import ensure_future
 from smartlink import Node, NodeServer
 
 import sys
@@ -19,9 +18,9 @@ def main():
 
     node.add_device(xps)
 
-    ensure_future(xps.open_connection("192.168.254.254", 5001))
-
     loop = asyncio.get_event_loop()
+    loop.run_until_complete(xps.open_connection("192.168.254.254", 5001))
+
     server = NodeServer(node, interval=0.2, loop=loop)
     server.start()
     try:

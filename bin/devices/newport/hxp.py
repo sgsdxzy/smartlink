@@ -35,6 +35,7 @@ class HXP(Device):
         self._group_num = 6
 
         # X, Y, Z, U, V, W
+        self._work_group_names = ["HEXAPOD.X", "HEXAPOD.Y", "HEXAPOD.Z", "HEXAPOD.U", "HEXAPOD.V", "HEXAPOD.W"]
         self._work_names = ['X', 'Y', 'Z', 'U', 'V', 'W']
         self._work_status = [0] * self._group_num
         self._work_positions = [0] * self._group_num
@@ -54,15 +55,15 @@ class HXP(Device):
         for i in range(6):
             group_name = self._work_names[i]
             self.add_update("Positon", "float",
-                lambda i=i: self._group_positions[i], grp=group_name)
+                lambda i=i: self._work_positions[i], grp=group_name)
             self.add_update("Status", "int",
-                lambda i=i: self._group_status[i], grp=group_name)
+                lambda i=i: self._work_status[i], grp=group_name)
             self.add_command("Absolute move", "float",
-                lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
+                lambda pos, i=i: self.absolute_move(i, pos), grp=group_name)
             self.add_command("Relative move", "float",
-                lambda pos, i=i: ensure_future(self.relative_move(i, pos)), grp=group_name)
+                lambda pos, i=i: self.relative_move(i, pos), grp=group_name)
             self.add_command("Relative move", "float",
-                lambda pos, i=i: ensure_future(self.relative_move(i, pos)), grp=group_name)
+                lambda pos, i=i: self.relative_move(i, pos), grp=group_name)
 
     def set_backlash(self, backlash):
         """Enable/disable backlash compensation."""
@@ -108,18 +109,17 @@ class HXP(Device):
         try:
             while True:
                 for i in range(self._group_num):
-                    try:
-                        group_name = self._group_names[i]
-                        status = await self.GroupStatusGet(group_name)
-                        self._group_status[i] = int(status[1])
-                        position = await self.GroupPositionCurrentGet(group_name, 1)
-                        self._group_positions[i] = float(position[1])
-                    except ValueError:
-                        # Would result in log spam
-                        pass
+                    group_name = self._work_group_names[i]
+                    status = await self.GroupStatusGet(group_name)
+                    self._work_status[i] = int(status[1])
+                    position = await self.GroupPositionCurrentGet(group_name, 1)
+                    self._work_positions[i] = float(position[1])
                 await asyncio.sleep(self._interval)
         except CancelledError:
             return
+        except Exception:
+            self._log_exception("Failed to query device status.")
+            self.close_connection()
 
     async def initialize_all(self):
         if not self._connected:
@@ -143,27 +143,43 @@ class HXP(Device):
             *[self.GroupKill(group_name) for group_name in self._group_names])
 
     async def absolute_move(self, i, pos):
-        group_name = self._group_names[i]
+        cmd = self._work_positions
         if not self._backlash:
-            await self.GroupMoveAbsolute(group_name, [str(pos)])
+            cmd[i] = pos
+            str_cmd = [str(ax) for ax in cmd]
+            await self.HexapodMoveAbsolute("HEXAPOD", "Work", *str_cmd)
         else:
-            current_pos = self._group_positions[i]
+            current_pos = self._work_positions[i]
             if pos - current_pos < self._comp_amount:
-                await self.GroupMoveAbsolute(group_name, [str(pos - self._comp_amount)])
-                await self.GroupMoveAbsolute(group_name, [str(pos)])
+                cmd[i] = pos - self._comp_amount
+                str_cmd = [str(ax) for ax in cmd]
+                await self.HexapodMoveAbsolute("HEXAPOD", "Work", *str_cmd)
+                cmd[i] = pos
+                str_cmd = [str(ax) for ax in cmd]
+                await self.HexapodMoveAbsolute("HEXAPOD", "Work", *str_cmd)
             else:
-                await self.GroupMoveAbsolute(group_name, [str(pos)])
+                cmd[i] = pos
+                str_cmd = [str(ax) for ax in cmd]
+                await self.HexapodMoveAbsolute("HEXAPOD", "Work", *str_cmd)
 
     async def relative_move(self, i, pos):
-        group_name = self._group_names[i]
+        cmd = [0] * 6
         if not self._backlash:
-            await self.GroupMoveRelative(group_name, [str(pos)])
+            cmd[i] = pos
+            str_cmd = [str(ax) for ax in cmd]
+            await self.HexapodMoveIncremental("HEXAPOD", "Work", *str_cmd)
         else:
             if pos < self._comp_amount:
-                await self.GroupMoveRelative(group_name, [str(pos - self._comp_amount)])
-                await self.GroupMoveRelative(group_name, [str(self._comp_amount)])
+                cmd[i] = pos - self._comp_amount
+                str_cmd = [str(ax) for ax in cmd]
+                await self.HexapodMoveIncremental("HEXAPOD", "Work", *str_cmd)
+                cmd[i] = self._comp_amount
+                str_cmd = [str(ax) for ax in cmd]
+                await self.HexapodMoveIncremental("HEXAPOD", "Work", *str_cmd)
             else:
-                await self.GroupMoveRelative(group_name, [str(pos)])
+                cmd[i] = pos
+                str_cmd = [str(ax) for ax in cmd]
+                await self.HexapodMoveIncremental("HEXAPOD", "Work", *str_cmd)
 
     async def open_connection(self, IP, port):
         if self._connected:

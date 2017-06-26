@@ -290,6 +290,7 @@ def main():
     asyncio.set_event_loop(loop)
     app.setStyle(QStyleFactory.create("fusion"))
     panel = ControlPanel()
+    panel.resize(800, 600)
     panel.showMaximized()
 
     with loop:

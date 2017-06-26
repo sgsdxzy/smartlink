@@ -1,7 +1,6 @@
 """Smartlink device for Stanford Research Systems."""
 
 import asyncio
-from asyncio import ensure_future
 import serial
 
 from . import ReactiveSerialDevice, DeviceError
@@ -52,36 +51,36 @@ class DG645(ReactiveSerialDevice):
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
         self.add_update("B", ["enum", "float"], lambda: self._delays[3],
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
-        self.add_command("A", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(2, d, t)),
+        self.add_command("A", ["enum", "float"], lambda d, t: self.set_delay(2, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
-        self.add_command("B", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(3, d, t)),
+        self.add_command("B", ["enum", "float"], lambda d, t: self.set_delay(3, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="AB")
 
         self.add_update("C", ["enum", "float"], lambda: self._delays[4],
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
         self.add_update("D", ["enum", "float"], lambda: self._delays[5],
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
-        self.add_command("C", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(4, d, t)),
+        self.add_command("C", ["enum", "float"], lambda d, t: self.set_delay(4, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
-        self.add_command("D", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(5, d, t)),
+        self.add_command("D", ["enum", "float"], lambda d, t: self.set_delay(5, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="CD")
 
         self.add_update("E", ["enum", "float"], lambda: self._delays[6],
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
         self.add_update("F", ["enum", "float"], lambda: self._delays[7],
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
-        self.add_command("E", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(6, d, t)),
+        self.add_command("E", ["enum", "float"], lambda d, t: self.set_delay(6, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
-        self.add_command("F", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(7, d, t)),
+        self.add_command("F", ["enum", "float"], lambda d, t: self.set_delay(7, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="EF")
 
         self.add_update("G", ["enum", "float"], lambda: self._delays[8],
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
         self.add_update("H", ["enum", "float"], lambda: self._delays[9],
                         ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
-        self.add_command("G", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(8, d, t)),
+        self.add_command("G", ["enum", "float"], lambda d, t: self.set_delay(8, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
-        self.add_command("H", ["enum", "float"], lambda d, t: ensure_future(self.set_delay(9, d, t)),
+        self.add_command("H", ["enum", "float"], lambda d, t: self.set_delay(9, d, t),
                          ["T0;T1;A;B;C;D;E;F;G;H", ""], grp="GH")
 
     async def init_device(self):

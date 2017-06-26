@@ -347,7 +347,7 @@ class GroupPanel(QFrame):
     title_font.setWeight(QFont.Bold)
     title_font.setPointSize(12)
 
-    def __init__(self, name="", maxlen=10):
+    def __init__(self, name="", maxlen=15):
         super().__init__()
         self._maxlen = maxlen
 

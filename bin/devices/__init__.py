@@ -71,8 +71,6 @@ class ReactiveSerialDevice(Device):
 
     def close_port(self):
         """Close serial port."""
-        if not self._connected:
-            return
         if self._readwriter is not None:
             self._readwriter.close()
             self._readwriter = None

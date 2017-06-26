@@ -52,8 +52,8 @@ class SingleShotController(uniblitz.VMMD3):
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
         self.add_update("Mode", "bool", lambda: self._firing_mode, grp="Firing Control")
-        self.add_update("Hardware Control", "bool", lambda: self._hardware, grp="Firing Control")
-        self.add_command("Enable Hardware Control", "bool", self.enable_hardware, grp="Firing Control")
+        # self.add_update("Hardware Control", "bool", lambda: self._hardware, grp="Firing Control")
+        # self.add_command("Enable Hardware Control", "bool", self.enable_hardware, grp="Firing Control")
         self.add_command("Switch Firing Mode", "bool", self.enable_firing_mode, grp="Firing Control")
         self.add_command("FIRE!", "", self.fire_single_shot, grp="Firing Control")
 

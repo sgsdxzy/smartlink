@@ -1,4 +1,3 @@
-"""Smartlink device for Newport Motion Controller."""
 # XPS Python class
 #
 # for XPS-Q8 Firmware Precision Platform V1.4.x
@@ -11,13 +10,11 @@ import asyncio
 from asyncio import wait_for, ensure_future
 from concurrent.futures import CancelledError
 
-from smartlink import node
+from . import Device, DeviceError, StreamReadWriter
 
 
-class XPS(node.Device):
+class XPS(Device):
     """Smartlink device for XPS-Q8 Motion Controller."""
-    # Initialization Function
-
     def __init__(self, name="XPS-Q8", group_names=[], interval=0.2,
             loop=None, queue_size=10):
         """group_names is a list of group names (eg. Group1) currently in use."""
@@ -45,7 +42,6 @@ class XPS(node.Device):
     def _init_smartlink(self):
         """Initilize smartlink commands and updates."""
         # TODO: connection and device status
-        # self.add_update("Backlash Compensation", "float", lambda: self._comp_amount, grp="")
         self.add_command("Backlash Compensation", "float", self.set_comp_amount, grp="")
         self.add_command("Enable", "bool", self.set_backlash, grp="")
         self.add_command("Initialize All", "", self.initialize_all, grp="")
@@ -59,59 +55,80 @@ class XPS(node.Device):
             self.add_update("Status", "int",
                 lambda i=i: self._group_status[i], grp=group_name)
             self.add_command("Absolute move", "float",
-                lambda pos, i=i: ensure_future(self.absolute_move(i, pos)), grp=group_name)
+                lambda pos, i=i: self.absolute_move(i, pos), grp=group_name)
             self.add_command("Relative move", "float",
-                lambda pos, i=i: ensure_future(self.relative_move(i, pos)), grp=group_name)
+                lambda pos, i=i: self.relative_move(i, pos), grp=group_name)
             self.add_command("Relative move", "float",
-                lambda pos, i=i: ensure_future(self.relative_move(i, pos)), grp=group_name)
+                lambda pos, i=i: self.relative_move(i, pos), grp=group_name)
 
     def set_backlash(self, backlash):
         """Enable/disable backlash compensation."""
-        if backlash == '0':
-            self._backlash = False
-        elif backlash == '1':
-            self._backlash = True
-        else:
-            self.logger.error(
-                self.fullname, "Unrecognized boolean value: {0}".format(backlash))
+        self._backlash = backlash
 
     def set_comp_amount(self, amount):
+        self._comp_amount = amount
+
+    async def _sendAndReceive(self, command):
+        """Send command and get return."""
+        if not self._connected:
+            self._log_error("Not connected.")
+            raise DeviceError
+
+        readwriter = await self._queue.get()
         try:
-            self._comp_amount = float(amount)
-        except ValueError:
-            self.logger.error(
-                self.fullname, "Invalid backlash compensation amount: {0}".format(amount))
+            readwriter.write(command.encode())
+            ret = await wait_for(readwriter.readuntil(b",EndOfAPI"), timeout=self._timeout)
+        except asyncio.TimeoutError:
+            self._log_error("Read timeout.")
+            self.close_connection()
+            raise DeviceError
+        except asyncio.IncompleteReadError:
+            self._log_error("Lost connection to device.")
+            self.close_connection()
+            raise DeviceError
+        except asyncio.LimitOverrunError:
+            self._log_error("Read buffer overrun.")
+            self.close_connection()
+            raise DeviceError
+        self._queue.put_nowait(readwriter)
+
+        ret = ret[:-9]
+        error, returnedString = ret.split(b',', 1)
+        error = int(error)
+        if error != 0:
+            self._log_error("Device returned error code: {0}".format(str(error)))
+            raise DeviceError
+        return (error, returnedString.decode())
 
     async def _query(self):
         """Periodically query group position and status."""
         try:
             while True:
                 for i in range(self._group_num):
-                    try:
-                        group_name = self._group_names[i]
-                        status = await self.GroupStatusGet(group_name)
-                        self._group_status[i] = int(status[1])
-                        position = await self.GroupPositionCurrentGet(group_name, 1)
-                        self._group_positions[i] = float(position[1])
-                    except ValueError:
-                        # Would result in log spam
-                        pass
+                    group_name = self._group_names[i]
+                    status = await self.GroupStatusGet(group_name)
+                    self._group_status[i] = int(status[1])
+                    position = await self.GroupPositionCurrentGet(group_name, 1)
+                    self._group_positions[i] = float(position[1])
                 await asyncio.sleep(self._interval)
         except CancelledError:
             return
+        except Exception:
+            self._log_exception("Failed to query device status.")
+            self.close_connection()
 
     async def initialize_all(self):
         if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return
+            self._log_error("Not connected.")
+            raise DeviceError
         await asyncio.gather(
             *[self.GroupInitialize(group_name) for group_name in self._group_names])
         # await self.get_status_all()
 
     async def home_all(self):
         if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return
+            self.log_error("Not connected.")
+            raise DeviceError
         await asyncio.gather(
             *[self.GroupHomeSearch(group_name) for group_name in self._group_names])
         # await self.get_status_all()
@@ -119,8 +136,8 @@ class XPS(node.Device):
 
     async def kill_all(self):
         if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return
+            self._log_error("Not connected.")
+            raise DeviceError
         await asyncio.gather(
             *[self.GroupKill(group_name) for group_name in self._group_names])
         # await self.get_status_all()
@@ -128,92 +145,48 @@ class XPS(node.Device):
     async def absolute_move(self, i, pos):
         group_name = self._group_names[i]
         if not self._backlash:
-            await self.GroupMoveAbsolute(group_name, [pos])
+            await self.GroupMoveAbsolute(group_name, [str(pos)])
         else:
-            target_pos = float(pos)
             current_pos = self._group_positions[i]
-            if target_pos - current_pos < self._comp_amount:
-                await self.GroupMoveAbsolute(group_name, [str(target_pos - self._comp_amount)])
-                await self.GroupMoveAbsolute(group_name, [pos])
+            if pos - current_pos < self._comp_amount:
+                await self.GroupMoveAbsolute(group_name, [str(pos - self._comp_amount)])
+                await self.GroupMoveAbsolute(group_name, [str(pos)])
             else:
-                await self.GroupMoveAbsolute(group_name, [pos])
+                await self.GroupMoveAbsolute(group_name, [str(pos)])
 
     async def relative_move(self, i, pos):
         group_name = self._group_names[i]
         if not self._backlash:
-            await self.GroupMoveRelative(group_name, [pos])
+            await self.GroupMoveRelative(group_name, [str(pos)])
         else:
-            target_pos = float(pos)
-            if target_pos < self._comp_amount:
-                await self.GroupMoveRelative(group_name, [str(target_pos - self._comp_amount)])
+            if pos < self._comp_amount:
+                await self.GroupMoveRelative(group_name, [str(pos - self._comp_amount)])
                 await self.GroupMoveRelative(group_name, [str(self._comp_amount)])
             else:
-                await self.GroupMoveRelative(group_name, [pos])
-
-    async def _sendAndReceive(self, command):
-        """Send command and get return."""
-        if not self._connected:
-            self.logger.error(self.fullname, "Not connected.")
-            return (-2, '')
-
-        readwriter = await self._queue.get()
-        reader = readwriter[0]
-        writer = readwriter[1]
-        try:
-            writer.write(command.encode("ascii"))
-            ret = await wait_for(reader.readuntil(b",EndOfAPI"), timeout=self._timeout)
-        except asyncio.TimeoutError:
-            self.logger.error(self.fullname, "Read timeout.")
-            self.close_connection()
-            return (-2, '')
-        except asyncio.IncompleteReadError:
-            self.logger.error(self.fullname, "Connection lost while reading.")
-            self.close_connection()
-            return (-2, '')
-        except asyncio.LimitOverrunError:
-            self.logger.error(self.fullname, "Read buffer overrun.")
-            self.close_connection()
-            return (-2, '')
-        self._queue.put_nowait(readwriter)
-
-        ret = ret[:-9]
-        error, returnedString = ret.split(b',', 1)
-        return (int(error), returnedString.decode("ascii"))
-
-    async def DisplayErrorAndClose(self, errorCode, APIName):
-        if (errorCode != -2) and (errorCode != -108):
-            (errorCode2, errorString) = await self.ErrorStringGet(errorCode)
-            if (errorCode2 != 0):
-                self.logger.error(self.fullname, ' '.join(
-                    (APIName, ': ERROR ', str(errorCode))))
-            else:
-                self.logger.error(self.fullname, ' '.join(
-                    (APIName, ': ', errorString)))
-        else:
-            if (errorCode == -2):
-                pass    # Already logged
-            if (errorCode == -108):
-                self.logger.error(self.fullname, ' '.join(
-                    (APIName, ': The TCP/IP connection was closed by an administrator')))
-        self.close_connection()
+                await self.GroupMoveRelative(group_name, [str(pos)])
 
     async def open_connection(self, IP, port):
         if self._connected:
-            # self.logger.error(self.fullname, "Already connected.")
+            self._log_warning("Already connected.")
             return
         try:
             for i in range(self._queue_size):
-                readwriter = await asyncio.open_connection(IP, port)
+                readwriter = StreamReadWriter(*await wait_for(asyncio.open_connection(IP, port), timeout=self._timeout))
                 self._readwriters.append(readwriter)
                 self._queue.put_nowait(readwriter)
-            self._connected = True
-        except Exception:
-            self.logger.exception(
-                self.fullname, "Failed to connect to {host}:{port}".format(
-                    host=IP, port=port))
+        except asyncio.TimeoutError:
+            self._log_error("Connection timeout.")
             self.close_connection()
-            return
+            raise DeviceError
+        except Exception:
+            self._log_exception("Failed to connect to {host}:{port}".format(host=IP, port=port))
+            self.close_connection()
+            raise DeviceError
+        self._connected = True
+        await self.init_device()
 
+    async def init_device(self):
+        """Initilize device after a successful `open_connection()`."""
         self._query_task = ensure_future(self._query())
 
     def close_connection(self):
@@ -222,7 +195,7 @@ class XPS(node.Device):
             self._query_task.cancel()
             self._query_task = None
         for readwriter in self._readwriters:
-            readwriter[1].close()
+            readwriter.close()
         self._readwriters.clear()
         self._queue = asyncio.Queue()
 
